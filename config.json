@@ -13,10 +13,10 @@
     },
     {
       "id": "app2",
-      "name": "LiveTrack CRUSHER 2",
-      "desc": "Talison Shut Two",
-      "url": "https://jbbunno.github.io/LiveTrack2/",
-      "emoji": "🔧",
+      "name": "SHUTDOWN DASHBOARD 2",
+      "desc": "Tallinson Dashboard 2",
+      "url": "https://jbbunno.github.io/Dashboard2/",
+      "emoji": "📊",
       "color": "c1",
       "enabled": true
     },
