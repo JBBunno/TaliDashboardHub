@@ -22,10 +22,10 @@
     },
     {
       "id": "app3",
-      "name": "Live Track CRUSHER 3",
-      "desc": "Talison Shut Three",
-      "url": "https://jbbunno.github.io/livetrack3/",
-      "emoji": "🛠️",
+      "name": "SHUTDOWN DASHBOARD 3",
+      "desc": "Tallinson Dashboard 3",
+      "url": "https://jbbunno.github.io/Dashboard3/",
+      "emoji": "📊",
       "color": "c2",
       "enabled": true
     },
@@ -36,7 +36,7 @@
       "url": "https://jbbunno.github.io/ShutFeedback/",
       "emoji": "📄",
       "color": "c3",
-      "enabled": true
+      "enabled": false
     }
   ]
 }
