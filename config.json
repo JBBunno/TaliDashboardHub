@@ -1,10 +1,10 @@
-{
+
   "adminPin": "1234",
   "loginPassword": "shutdown",
   "apps": [
     {
       "id": "app1",
-      "name": "SHUTDOWN DASHBOARD 1",
+      "name": "SHUTDOWN DASHBOARD 1 - CPG1",
       "desc": "Tallinson Dashboard 1",
       "url": "https://jbbunno.github.io/Dashboard1/",
       "emoji": "📊",
@@ -18,7 +18,7 @@
       "url": "https://jbbunno.github.io/Dashboard2/",
       "emoji": "📊",
       "color": "c1",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "app3",
