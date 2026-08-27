@@ -4,7 +4,7 @@
   "apps": [
     {
       "id": "app1",
-      "name": "SHUTDOWN DASHBOARD 1 - CR01",
+      "name": "SHUTDOWN DASHBOARD 1 - CGP2",
       "desc": "Tallinson Dashboard 1",
       "url": "https://jbbunno.github.io/Dashboard1/",
       "emoji": "📊",
@@ -13,7 +13,7 @@
     },
     {
       "id": "app2",
-      "name": "SHUTDOWN DASHBOARD 2 - CR02",
+      "name": "SHUTDOWN DASHBOARD 2 - TRP",
       "desc": "Tallinson Dashboard 2",
       "url": "https://jbbunno.github.io/Dashboard2/",
       "emoji": "📊",
@@ -22,7 +22,7 @@
     },
     {
       "id": "app3",
-      "name": "SHUTDOWN DASHBOARD 3 - CRO3",
+      "name": "SHUTDOWN DASHBOARD 3 - TGP",
       "desc": "Tallinson Dashboard 3",
       "url": "https://jbbunno.github.io/Dashboard3/",
       "emoji": "📊",
