@@ -4,7 +4,7 @@
   "apps": [
     {
       "id": "app1",
-      "name": "SHUTDOWN DASHBOARD 1 - CR1",
+      "name": "SHUTDOWN DASHBOARD 1 - CPG3",
       "desc": "Tallinson Dashboard 1",
       "url": "https://jbbunno.github.io/Dashboard1/",
       "emoji": "📊",
@@ -13,7 +13,7 @@
     },
     {
       "id": "app2",
-      "name": "SHUTDOWN DASHBOARD 2 - CR2",
+      "name": "SHUTDOWN DASHBOARD 2 - CPG1",
       "desc": "Tallinson Dashboard 2",
       "url": "https://jbbunno.github.io/Dashboard2/",
       "emoji": "📊",
