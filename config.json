@@ -42,7 +42,7 @@
       "id": "app5",
       "name": "Shutdown Data Upload Panel",
       "desc": "Upload MS Project Data to Cloud",
-      "url": "https://shuthub.palmcrest.com.au/talison-upload/",
+      "url": "https://taldashboard.palmcrest.com.au/talison-upload/",
       "emoji": "🌐",
       "color": "c4",
       "enabled": true
