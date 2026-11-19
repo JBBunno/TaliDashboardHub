@@ -344,7 +344,7 @@ const FIELDS = [
   ['critical','Critical (Yes/No)'],['preds','Predecessors'],['team','Team'],['res','Resource names'],['notes','Notes'],
   ['bstart','Baseline start'],['bfinish','Baseline finish'],['astart','Actual start'],['afinish','Actual finish'],
   ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)'],
-  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)']
+  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)'],['active','Active (Yes/No)']
 ];
 const ALIASES = {
   name:['name','taskname','task','activityname','activity','description','tasks'],
@@ -358,14 +358,14 @@ const ALIASES = {
   summary:['summary','issummary'],
   milestone:['milestone','ismilestone'],
   critical:['critical','iscritical'],
-  preds:['predecessors','predecessor','preds'],
+  preds:['predecessors','predecessor','preds','pred'],
   team:['resourcegroup','team','crew','contractor','discipline','company'],
   res:['resourcenames','resources','resource','resourcename'],
   notes:['notes','note','comments','supervisornotes'],
   bstart:['baselinestart','plannedstart','baseline0start'], bfinish:['baselinefinish','plannedfinish','baseline0finish'], astart:['actualstart'], afinish:['actualfinish'],
   deadline:['deadline'], sdate:['statusdate','datadate'], link:['hyperlink','hyperlinkaddress','link'],
   exec:['executivesummary','executivcesummary','execsummary','exec'],
-  slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag']
+  slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag'], active:['active']
 };
 const DATE_FIELDS = ['start','finish','bstart','bfinish','astart','afinish','deadline','sdate'];
 const ST_LABEL = {done:'Complete', late:'Late', ip:'In progress', ns:'Not started'};
@@ -537,12 +537,14 @@ function applyData(opts={}){
 
   const hasOutline = map.level >= 0 || map.wbs >= 0;
   const base = [];
-  let skipped = 0, dataSD = null;
+  let skipped = 0, inactive = 0, dataSD = null;
   rows.forEach(r => {
     if(!dataSD) dataSD = parseDate(get(r, 'sdate'), dmy);
     const name = String(get(r, 'name') ?? '').trim();
     // rows with no task name (blank or junk rows in the export) are left out
     if(!name){ skipped++; return; }
+    // inactive tasks (Active = No in Project) are left out
+    if(map.active >= 0 && /^(no|n|false|0)$/i.test(String(get(r, 'active') ?? '').trim())){ inactive++; return; }
     const start = parseDate(get(r, 'start'), dmy), finish = parseDate(get(r, 'finish'), dmy);
     const wbs = String(get(r, 'wbs') ?? '').trim();
     let level = parseInt(get(r, 'level'), 10);
@@ -603,7 +605,7 @@ function applyData(opts={}){
 
   // commit
   S.base = base; S.headers = headers; S.source = P.name; S.sheet = P.sn; S.hasOutline = hasOutline;
-  S.skipped = skipped; S.dataSD = dataSD; S.hasExec = map.exec >= 0;
+  S.skipped = skipped; S.inactive = inactive; S.dataSD = dataSD; S.hasExec = map.exec >= 0;
   // use the schedule's own status date unless the viewer has picked one
   if(dataSD && !S.sdManual){ S.statusDate = dataSD; setStatusInput(); }
   S.dateCols = new Set(DATE_FIELDS.map(f => map[f]).filter(i => i >= 0));
@@ -1360,6 +1362,7 @@ function updateSourceLabels(){
   const notes = [];
   if(!S.hasOutline) notes.push('No Outline Level/WBS column in this data – rows are grouped by columns. Add "Outline Level" to the export to see the Project WBS.');
   if(S.skipped) notes.push(`${S.skipped} rows with no task name were left out.`);
+  if(S.inactive) notes.push(`${S.inactive} inactive tasks are hidden.`);
   $('#notice').textContent = notes.join(' ');
   const ex = document.querySelector('#filter option[value="exec"]'); if(ex) ex.hidden = !S.hasExec;
 }
