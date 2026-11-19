@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talison Schedule Viewer – Gantt (Dashboard 1)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#f4f6f9; --panel:#fff; --ink:#18212c; --muted:#677385; --line:#e6eaf0; --line2:#d3d9e2;
+  --navy:#0f2a44; --accent:#0e8f8a; --task:#2f6fdb; --taskBg:#d6e4fb; --crit:#d0393b; --critBg:#f8d5d5;
+  --done:#2e9e5b; --doneBg:#d3eedd; --late:#e07b00; --sum:#26323f; --rowH:26px; --hdrH:48px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;font-size:13px;color:var(--ink);background:var(--bg)}
+body{display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;border:1px solid var(--line2);background:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;color:var(--ink);white-space:nowrap}
+button:hover{background:#eef3f8}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.primary:hover{background:#0b7a76}
+input,select{font:inherit;border:1px solid var(--line2);border-radius:6px;padding:5px 8px;background:#fff;color:var(--ink)}
+
+/* top bar */
+.top{background:var(--navy);color:#fff;padding:8px 14px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:14px;line-height:1.15}
+.brand small{display:block;font-weight:400;opacity:.65;font-size:11px}
+.proj{font-weight:600;font-size:15px;flex:1;min-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj small{display:block;font-weight:400;opacity:.65;font-size:11px}
+.kpi{display:flex;gap:14px;align-items:center;font-size:12px}
+.kpi b{font-size:15px}
+.kpi .pbar{width:120px;height:8px;background:rgba(255,255,255,.2);border-radius:4px;overflow:hidden}
+.kpi .pbar i{display:block;height:100%;background:#4fd1a5}
+.kpi .k{display:flex;flex-direction:column;align-items:flex-start;line-height:1.2}
+.kpi .k span{opacity:.7;font-size:11px}
+.top button{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
+.top button:hover{background:rgba(255,255,255,.1)}
+.top button.primary{background:var(--accent);border-color:var(--accent)}
+
+/* toolbar */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:7px 14px;background:var(--panel);border-bottom:1px solid var(--line2)}
+.toolbar label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-left:4px}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:6px;overflow:hidden}
+.seg button{border:none;border-radius:0;border-right:1px solid var(--line2);padding:5px 9px}
+.seg button:last-child{border-right:none}
+.seg button.on{background:var(--navy);color:#fff}
+#q{width:200px}
+.legend{margin-left:auto;display:flex;gap:10px;align-items:center;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.legend span{display:inline-flex;align-items:center;gap:4px}
+.lg{display:inline-block;width:18px;height:9px;border-radius:2px}
+
+/* gantt */
+#scroller{flex:1;overflow:auto;position:relative;background:#fff}
+#canvas{position:relative}
+#hdr{position:sticky;top:0;z-index:20;height:var(--hdrH);background:#f7f9fb;border-bottom:1px solid var(--line2)}
+#hcells{position:sticky;left:0;z-index:3;display:flex;height:100%;background:#f7f9fb;border-right:2px solid var(--line2)}
+#hcells div{display:flex;align-items:flex-end;padding:0 6px 7px;font-weight:600;font-size:11.5px;color:var(--muted);border-right:1px solid var(--line);text-transform:uppercase;letter-spacing:.3px}
+#axis{position:absolute;left:0;top:0;height:100%;z-index:1}
+.tt,.bt{position:absolute;border-left:1px solid var(--line2);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden}
+.tt{top:0;height:24px;line-height:24px;font-weight:600;color:var(--ink);border-bottom:1px solid var(--line)}
+.tt span{position:sticky;padding-left:6px}
+.bt{top:24px;height:24px;line-height:24px;text-align:center;border-left-color:var(--line)}
+.bt.we{background:#f0f2f6}
+.nowh{position:absolute;top:0;height:100%;width:2px;background:var(--crit);z-index:2}
+.nowh span{position:absolute;top:2px;left:4px;background:var(--crit);color:#fff;font-size:10px;font-weight:600;padding:1px 5px;border-radius:3px;white-space:nowrap}
+#body{position:relative}
+#gridLayer{position:absolute;left:0;top:0;bottom:0;z-index:0;pointer-events:none}
+.gl{position:absolute;top:0;bottom:0;width:1px;background:#f0f2f5}
+.gl2{position:absolute;top:0;bottom:0;width:1px;background:#dde2e9}
+.we{position:absolute;top:0;bottom:0;background:#f7f8fa}
+.nowl{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--crit);opacity:.75}
+#rows{position:absolute;left:0;top:0;z-index:2}
+#cover{position:sticky;left:0;top:0;height:100%;background:#fff;border-right:2px solid var(--line2);z-index:1}
+.row{position:absolute;left:0;height:var(--rowH);border-bottom:1px solid #f1f3f6;cursor:pointer}
+.row:hover{background:rgba(47,111,219,.04)}
+.row.sel{background:rgba(47,111,219,.09)}
+.cells{position:sticky;left:0;z-index:3;display:flex;height:100%;background:#fff;border-right:2px solid var(--line2)}
+.row:hover .cells{background:#f4f8fe}
+.row.sel .cells{background:#e5eefc}
+.row.sum .cells{background:#fafbfc}
+.row.sum:hover .cells{background:#f1f5fb}
+.row.sum.sel .cells{background:#e5eefc}
+.c{padding:0 6px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;line-height:var(--rowH);border-right:1px solid var(--line);font-size:12px}
+.c.num{text-align:right;font-variant-numeric:tabular-nums}
+.c.dt{font-variant-numeric:tabular-nums;color:#3b4654}
+.c.wbs{color:var(--muted);font-size:11.5px}
+.c.name{display:flex;align-items:center;gap:5px;font-size:12.5px}
+.row.sum .c.name{font-weight:600}
+.nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.chev{width:14px;flex:none;text-align:center;color:var(--muted);font-size:11px}
+.row.sum .chev{color:var(--ink)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none;background:#c3cad4}
+.dot.ip{background:var(--task)} .dot.done{background:var(--done)} .dot.late{background:var(--late)}
+.info{flex:none;color:var(--muted);font-size:13px;padding:0 2px;border-radius:3px;opacity:.55}
+.info:hover{opacity:1;background:#dfe7f2;color:var(--ink)}
+.bar{position:absolute;top:6px;height:14px;border-radius:3px;background:var(--taskBg);border:1px solid var(--task);overflow:hidden}
+.bar .pg{position:absolute;left:0;top:0;bottom:0;background:var(--task)}
+.bar.crit{background:var(--critBg);border-color:var(--crit)} .bar.crit .pg{background:var(--crit)}
+.bar.done{background:var(--doneBg);border-color:var(--done)} .bar.done .pg{background:var(--done)}
+.bar.late{box-shadow:0 0 0 2px rgba(224,123,0,.45)}
+.sbar{position:absolute;top:8px;height:7px;background:#9aa5b3}
+.sbar .pg{position:absolute;left:0;top:0;bottom:0;background:var(--sum)}
+.sbar:before,.sbar:after{content:"";position:absolute;top:7px;border-top:5px solid var(--sum)}
+.sbar:before{left:0;border-right:5px solid transparent}
+.sbar:after{right:0;border-left:5px solid transparent}
+.ms{position:absolute;top:7px;width:12px;height:12px;transform:rotate(45deg);background:var(--navy);border-radius:1px}
+.ms.crit{background:var(--crit)} .ms.done{background:var(--done)}
+.dl{position:absolute;top:1px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:8px solid #7a3fb0;z-index:2}
+.dl.miss{border-top-color:var(--crit)}
+.bl{position:absolute;top:21px;height:3px;background:#b4bcc7;border-radius:1px}
+.lbl{position:absolute;top:0;line-height:var(--rowH);font-size:11.5px;color:var(--muted);white-space:nowrap;pointer-events:none}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+
+/* job card */
+#card{position:fixed;top:0;right:0;bottom:0;width:min(460px,100vw);background:#fff;box-shadow:-8px 0 30px rgba(15,42,68,.18);z-index:60;transform:translateX(105%);transition:transform .2s ease;display:flex;flex-direction:column}
+#card.open{transform:none}
+.ch{background:var(--navy);color:#fff;padding:14px 16px 12px;position:relative}
+.ch .crumb{font-size:11px;opacity:.7;margin-bottom:4px;padding-right:30px;line-height:1.4}
+.ch .tag{font-size:11px;opacity:.85;font-variant-numeric:tabular-nums}
+.ch h2{margin:4px 0 8px;font-size:17px;line-height:1.3;padding-right:24px}
+.ch .x{position:absolute;right:10px;top:8px;background:transparent;border:none;color:#fff;font-size:22px;padding:2px 8px}
+.pills{display:flex;gap:6px;flex-wrap:wrap}
+.pill{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.15)}
+.pill.done{background:var(--done)} .pill.late{background:var(--late)} .pill.ip{background:var(--task)} .pill.ns{background:#6b7686} .pill.crit{background:var(--crit)}
+.cb{flex:1;overflow:auto;padding:14px 16px 20px}
+.big{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.big .pbar{flex:1;height:10px;background:#e8edf3;border-radius:5px;overflow:hidden}
+.big .pbar i{display:block;height:100%;background:var(--task)}
+.big b{font-size:20px;font-variant-numeric:tabular-nums}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin-bottom:16px}
+.kv div{min-width:0}
+.kv span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:2px}
+.kv b{font-weight:500;font-variant-numeric:tabular-nums;word-break:break-word}
+.kv .full{grid-column:1/-1}
+.var-bad{color:var(--crit)} .var-good{color:var(--done)}
+.sec{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:16px 0 6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.links a{display:flex;gap:6px;align-items:center;padding:5px 6px;border-radius:5px;color:var(--ink);text-decoration:none;cursor:pointer;font-size:12.5px}
+.links a:hover{background:#eef3f9}
+.links a em{font-style:normal;color:var(--muted);font-size:11.5px;min-width:34px}
+.links a .dot{margin-left:auto}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:6px}
+.stats div{background:#f4f6f9;border-radius:6px;padding:8px;text-align:center}
+.stats b{display:block;font-size:17px}
+.stats span{font-size:10.5px;color:var(--muted)}
+.notes{background:#fffbea;border:1px solid #f1e3a6;border-radius:6px;padding:8px 10px;white-space:pre-wrap;font-size:12.5px}
+table.all{width:100%;border-collapse:collapse;font-size:12px}
+table.all td{padding:4px 6px;border-bottom:1px solid var(--line);vertical-align:top}
+table.all td:first-child{color:var(--muted);width:42%}
+.cf{display:flex;gap:6px;padding:10px 16px;border-top:1px solid var(--line);background:#fafbfc}
+.cf .sp{flex:1}
+
+/* modal / misc */
+.ovl{position:fixed;inset:0;background:rgba(15,42,68,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
+.ovl.open{display:flex}
+body:not(.sched) .sched-only{display:none!important}
+.brand{cursor:default;user-select:none;-webkit-tap-highlight-color:transparent}
+#btnLock{border-color:var(--late);color:var(--late)}
+.dlg{background:#fff;border-radius:10px;max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.dlg h3{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
+.dlg .db{padding:14px 18px;overflow:auto}
+.dlg .df{padding:10px 18px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+.mapgrid{display:grid;grid-template-columns:170px 1fr;gap:6px 10px;align-items:center}
+.mapgrid select{width:100%}
+.req{color:var(--crit)}
+.help p,.help li{line-height:1.5}
+.help code{background:#f1f4f8;padding:1px 4px;border-radius:3px}
+#drop{position:fixed;inset:10px;border:3px dashed var(--accent);border-radius:14px;background:rgba(14,143,138,.08);z-index:90;display:none;align-items:center;justify-content:center;font-size:20px;font-weight:600;color:var(--accent);pointer-events:none}
+#drop.on{display:flex}
+#tip{position:fixed;z-index:70;pointer-events:none;background:var(--navy);color:#fff;font-size:12px;padding:7px 9px;border-radius:6px;max-width:320px;display:none;line-height:1.45;box-shadow:0 6px 18px rgba(0,0,0,.2)}
+#toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:9px 16px;border-radius:8px;z-index:95;display:none;font-size:13px}
+.foot{padding:4px 14px;font-size:11px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line2);display:flex;gap:12px;flex-wrap:wrap}
+@media (max-width:760px){
+  .legend{display:none} #q{width:140px} .kpi .pbar{width:70px}
+  .foot span:last-child{display:none} .toolbar label{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="brand">PalmCrest<small>Talison Schedule Viewer</small></div>
+  <div class="proj" id="projName">Loading…<small id="projSub"></small></div>
+  <div class="kpi" id="kpi"></div>
+  <button id="btnRefresh" title="Reload the Google Sheet now" style="display:none">⟳ Refresh</button>
+  <button id="btnSheet" class="sched-only" title="Load from a Google Sheet">Google Sheet…</button>
+  <button class="primary sched-only" id="btnLoad">Load Excel…</button>
+  <button id="btnLock" class="sched-only" title="Leave scheduler mode">🔒 Lock</button>
+  <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
+</div>
+
+<div class="toolbar">
+  <input type="search" id="q" placeholder="Search task, WBS, work order…">
+  <label>Filter</label>
+  <select id="filter">
+    <option value="all">All tasks</option>
+    <option value="open">Not completed</option>
+    <option value="critical">Critical (total slack ≤ 0)</option>
+    <option value="cpct">CP / CT rows</option>
+    <option value="cp">CP only</option>
+    <option value="ct">CT only</option>
+    <option value="late">Late</option>
+    <option value="ip">In progress</option>
+    <option value="ns">Not started</option>
+    <option value="done">Complete</option>
+    <option value="ms">Milestones</option>
+    <option value="wbs">WBS rows only</option>
+    <option value="exec">Executive summary rows</option>
+    <option value="next12">Starting next 12 hrs</option>
+    <option value="next24">Starting next 24 hrs</option>
+    <option value="next7d">Starting next 7 days</option>
+  </select>
+  <select id="fTeam" title="Show one team"></select>
+  <select id="fRes" title="Show one resource"></select>
+  <label>Group</label>
+  <select id="g1" title="How rows are grouped into expandable levels"></select>
+  <select id="g2" title="Second grouping level"></select>
+  <label>Sort</label>
+  <select id="sortBy" title="Sort tasks within each WBS level / group">
+    <option value="wbs">WBS order</option>
+    <option value="start">Start (earliest first)</option>
+    <option value="finish">Finish (earliest first)</option>
+    <option value="team">Team (A–Z)</option>
+    <option value="pct">% complete (lowest first)</option>
+    <option value="slack">Total slack (least first)</option>
+    <option value="name">Task name (A–Z)</option>
+  </select>
+  <label>Show levels</label>
+  <div class="seg" id="levels"></div>
+  <label>Zoom</label>
+  <div class="seg" id="zooms"></div>
+  <button id="btnNow" title="Scroll to the status date">Go to status date</button>
+  <label>Status date</label>
+  <input type="datetime-local" id="sdate">
+  <div class="legend">
+    <span><i class="lg" style="background:var(--task)"></i>Task</span>
+    <span><i class="lg" style="background:var(--crit)"></i>Critical</span>
+    <span><i class="lg" style="background:var(--done)"></i>Complete</span>
+    <span><i class="lg" style="background:var(--sum);height:5px"></i>Summary</span>
+    <span><i class="lg" style="background:#b4bcc7;height:3px"></i>Baseline</span>
+    <span style="color:#7a3fb0">▼</span><span style="margin-left:-6px">Deadline</span>
+    <span><i class="lg" style="width:9px;background:var(--late);border-radius:50%"></i>Late</span>
+    <button id="btnHelp" style="padding:3px 9px">?</button>
+  </div>
+</div>
+
+<div id="scroller">
+  <div id="canvas">
+    <div id="hdr"><div id="hcells"></div><div id="axis"></div></div>
+    <div id="body"><div id="gridLayer"></div><div id="cover"></div><div id="rows"></div></div>
+  </div>
+</div>
+<div class="foot"><span id="footSrc"></span><span id="notice" style="color:var(--late)"></span><span id="footCount"></span><span style="margin-left:auto">Click a summary row to expand/collapse · click a task or ⓘ for its job card · drag an Excel file anywhere to load it</span></div>
+
+<aside id="card"></aside>
+
+<div class="ovl" id="mapOvl"><div class="dlg">
+  <h3>Match your Excel columns</h3>
+  <div class="db" id="mapBody"></div>
+  <div class="df"><button id="mapCancel">Cancel</button><button class="primary" id="mapApply">Apply</button></div>
+</div></div>
+
+<div class="ovl" id="helpOvl"><div class="dlg">
+  <h3>Getting your schedule in</h3>
+  <div class="db help">
+    <p>Export from MS Project with <b>File › Save As › Excel Workbook</b> (or your existing export map). Any of these column names are recognised automatically:</p>
+    <ul>
+      <li><b>Required:</b> <code>Name</code>, <code>Start</code>, <code>Finish</code></li>
+      <li><b>Hierarchy:</b> <code>Outline Level</code> and/or <code>WBS</code> (either works; both is best)</li>
+      <li><b>Recommended:</b> <code>ID</code>, <code>Duration</code>, <code>% Complete</code>, <code>Summary</code>, <code>Milestone</code>, <code>Critical</code>, <code>Predecessors</code>, <code>Resource Names</code>, <code>Baseline Start</code>, <code>Baseline Finish</code>, <code>Notes</code></li>
+      <li><b>Anything else</b> (Work Order, Operation, Work Centre, FLOC, Text fields…) is shown on the job card and is searchable.</li>
+    </ul>
+    <p>Dates can be Excel dates or text like <code>Mon 16/11/26 7:00 AM</code>. Rows must stay in Project's order (top to bottom), which is how Project exports them.</p>
+    <p><b>Hosting:</b> put this page and your export named <code>schedule.xlsx</code> in the same folder (e.g. GitHub Pages) and it loads automatically. <code>?file=other.xlsx</code> picks a different file.</p>
+    <p style="margin-bottom:0" class="sched-only"><button id="btnMapOpen">Change column matching…</button> <button id="btnSample">Load sample shutdown</button></p>
+  </div>
+  <div class="df"><button class="primary" id="helpClose">Close</button></div>
+</div></div>
+
+<div class="ovl" id="sheetOvl"><div class="dlg">
+  <h3>Load from a Google Sheet</h3>
+  <div class="db help">
+    <p style="margin-top:0">Paste the sheet's link. It must be shared as <b>Anyone with the link – Viewer</b>. The first tab is used unless the link includes <code>#gid=…</code> for another tab.</p>
+    <input id="sheetUrl" style="width:100%" placeholder="https://docs.google.com/spreadsheets/d/…">
+    <p>Auto-refresh: <select id="sheetAuto"><option value="0">Off</option><option value="2">Every 2 min</option><option value="5">Every 5 min</option><option value="15">Every 15 min</option></select></p>
+    <p style="color:var(--muted);margin-bottom:0">The link is remembered in this browser only. To set it for everyone, edit <code>CONFIG.SHEET</code> at the top of the page's code.</p>
+  </div>
+  <div class="df"><button id="sheetForget">Forget saved link</button><span style="flex:1"></span><button id="sheetCancel">Cancel</button><button class="primary" id="sheetGo">Load sheet</button></div>
+</div></div>
+
+<div class="ovl" id="pinOvl"><div class="dlg" style="max-width:340px">
+  <h3>Scheduler access</h3>
+  <div class="db"><p style="margin-top:0">Enter the scheduler PIN to load a different file or sheet.</p>
+    <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" style="width:100%">
+    <p id="pinErr" style="color:var(--crit);margin-bottom:0;min-height:1em"></p></div>
+  <div class="df"><button id="pinCancel">Cancel</button><button class="primary" id="pinGo">Unlock</button></div>
+</div></div>
+
+<div id="drop">Drop your Project Excel export to load it</div>
+<div id="tip"></div>
+<div id="toast"></div>
+
+<script>
+'use strict';
+/* ================= CONFIG – edit these for your hosted copy ================= */
+const CONFIG = {
+  // Google Sheet to load (must be shared "Anyone with the link can view"). Leave '' to skip.
+  // Add #gid=NNN (from the sheet's URL) to pick a tab other than the first one.
+  SHEET: 'https://docs.google.com/spreadsheets/d/1ZhOwgVk_tlWLFR0s_PoAREyB-eGHCpF9D7001lp9B_o/edit',   // Talison Dashboard 1 sheet – first tab (Tasks)
+  AUTO_REFRESH_MIN: 5,          // minutes between automatic reloads of the Google Sheet (0 = off)
+  FILE: '',                     // uses the Google Sheet above (no local Excel file)
+  // Dashboard 1 script – the Gantt uses the same status date the scheduler sets on the dashboard
+  STATUS_URL: 'https://script.google.com/macros/s/AKfycbwp4KdsvPWv2pON1iIOTjaJhYeLJpLZWBfShz2nBZRPCsCIeVH40o-GAURk9gPg7d-BZw/exec',
+  // The Talison sheet shows dates month-first (11/23/26 18:00); forced so early-month dates aren't misread
+  DATE_ORDER: 'mdy',
+  KEY: 'talgantt1',             // browser storage prefix (keeps each Gantt's saved settings separate)
+  // Scheduler PIN (SHA-256 hash). Tap the "PalmCrest" logo 5 times to unlock Load Excel / Google Sheet.
+  // Default PIN 2468 – to change, hash a new PIN (e.g. the Hub admin "Change access code" tool) and paste here.
+  SCHED_PIN_HASH: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'
+};
+/* ================= constants ================= */
+const RH = 26, HDR = 48;
+const HOUR = 36e5, DAY = 864e5;
+const ZOOMS = {
+  hour:  {label:'Hours',  unit:'hour',  top:'day',   px:32, ms:HOUR},
+  shift: {label:'Shifts', unit:'h6',    top:'day',   px:42, ms:6*HOUR},
+  day:   {label:'Days',   unit:'day',   top:'month', px:34, ms:DAY},
+  week:  {label:'Weeks',  unit:'week',  top:'month', px:64, ms:7*DAY},
+  month: {label:'Months', unit:'month', top:'year',  px:72, ms:30.44*DAY}
+};
+const COLS = [
+  {k:'wbs',   t:'WBS',       w:70},
+  {k:'name',  t:'Task name', w:500, wn:190},
+  {k:'team',  t:'Team',      w:100, narrowHide:true},
+  {k:'res',   t:'Resource',  w:120, narrowHide:true},
+  {k:'start', t:'Start',     w:114, narrowHide:true},
+  {k:'finish',t:'Finish',    w:114, narrowHide:true},
+  {k:'dur',   t:'Dur',       w:66,  narrowHide:true},
+  {k:'pct',   t:'%',         w:54}
+];
+const FIELDS = [
+  ['name','Task name',1],['start','Start',1],['finish','Finish',1],['level','Outline level'],['wbs','WBS'],['id','ID'],
+  ['duration','Duration'],['pct','% Complete'],['summary','Summary (Yes/No)'],['milestone','Milestone (Yes/No)'],
+  ['critical','Critical (Yes/No)'],['preds','Predecessors'],['team','Team'],['res','Resource names'],['notes','Notes'],
+  ['bstart','Baseline start'],['bfinish','Baseline finish'],['astart','Actual start'],['afinish','Actual finish'],
+  ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)'],
+  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)']
+];
+const ALIASES = {
+  name:['name','taskname','task','activityname','activity','description','tasks'],
+  start:['start','startdate','scheduledstart','earlystart'],
+  finish:['finish','finishdate','end','enddate','scheduledfinish','earlyfinish'],
+  level:['outlinelevel','level','wbslevel'],
+  wbs:['wbs','outlinenumber','wbscode'],
+  id:['id','taskid'],
+  duration:['duration','dur','plannedduration'],
+  pct:['complete','percentcomplete','pctcomplete','percentcomp','progress','physicalcomplete'],
+  summary:['summary','issummary'],
+  milestone:['milestone','ismilestone'],
+  critical:['critical','iscritical'],
+  preds:['predecessors','predecessor','preds'],
+  team:['resourcegroup','team','crew','contractor','discipline','company'],
+  res:['resourcenames','resources','resource','resourcename'],
+  notes:['notes','note','comments','supervisornotes'],
+  bstart:['baselinestart','plannedstart','baseline0start'], bfinish:['baselinefinish','plannedfinish','baseline0finish'], astart:['actualstart'], afinish:['actualfinish'],
+  deadline:['deadline'], sdate:['statusdate','datadate'], link:['hyperlink','hyperlinkaddress','link'],
+  exec:['executivesummary','executivcesummary','execsummary','exec'],
+  slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag']
+};
+const DATE_FIELDS = ['start','finish','bstart','bfinish','astart','afinish','deadline','sdate'];
+const ST_LABEL = {done:'Complete', late:'Late', ip:'In progress', ns:'Not started'};
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const MONL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+/* ================= state ================= */
+const S = {
+  tasks:[], byId:new Map(), headers:[], dateCols:new Set(), source:'', sheet:'', project:'',
+  zoom:'day', expanded:new Set(), filter:'all', q:'', statusDate:new Date(),
+  fTeam:'', fRes:'', base:[], skipped:0, sdManual:false, dataSD:null, group:{g1:'outline', g2:-1}, sort:'wbs', hasOutline:true, live:null, dmy:true,
+  visible:[], selI:-1, minLevel:1, maxLevel:1, hasTimes:true,
+  t0:0, t1:0, px:0, gridW:0, canvasW:0, cols:COLS, pending:null, wb:null
+};
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const p2 = n => String(n).padStart(2, '0');
+const lsGet = k => { try { return localStorage.getItem(k); } catch(e) { return null; } };
+const lsSet = (k,v) => { try { localStorage.setItem(k, v); } catch(e) {} };
+
+function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none', ms); }
+
+function fmtShort(d){
+  if(!d) return '';
+  const s = `${p2(d.getDate())}/${p2(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`;
+  return S.hasTimes ? `${s} ${p2(d.getHours())}:${p2(d.getMinutes())}` : s;
+}
+function fmtLong(d){
+  if(!d) return '—';
+  const s = `${WD[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+  return S.hasTimes ? `${s} ${p2(d.getHours())}:${p2(d.getMinutes())}` : s;
+}
+function fmtDurMs(ms){
+  const h = Math.abs(ms) / HOUR;
+  if(h < 48){ const r = Math.round(h*10)/10; return r + (r === 1 ? ' hr' : ' hrs'); }
+  return (Math.round(h/24*10)/10) + ' days';
+}
+
+/* ---------- value parsing ---------- */
+function fromSerial(n){
+  const d = new Date(Math.round((n - 25569) * DAY));
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes());
+}
+function parseTime(s){
+  let m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?(?:\s*([AaPp])\.?[Mm]\.?)?/);
+  if(!m){ const m2 = s.match(/\b(\d{1,2})\s*([AaPp])[Mm]\b/); if(m2) m = [0, m2[1], '0', m2[2]]; }
+  if(!m) return [0,0];
+  let h = +m[1]; const mi = +m[2];
+  if(m[3]){ const pm = /p/i.test(m[3]); h = h % 12 + (pm ? 12 : 0); }
+  return [h, mi];
+}
+const MONIDX = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseDate(v, dmy=true){
+  if(v == null || v === '') return null;
+  if(v instanceof Date) return isNaN(v) ? null : new Date(v.getTime());
+  if(typeof v === 'number'){ return (v > 1000 && v < 200000) ? fromSerial(v) : null; }
+  let s = String(v).trim();
+  if(!s || /^(na|n\/a|-|nil|none)$/i.test(s)) return null;
+  if(/^\d+(\.\d+)?$/.test(s)){ const n = +s; return (n > 1000 && n < 200000) ? fromSerial(n) : null; }
+  let y, mo, d, m;
+  if((m = s.match(/(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/))){ y=+m[1]; mo=+m[2]-1; d=+m[3]; s = s.replace(m[0], ' '); }
+  else if((m = s.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/))){
+    let a=+m[1], b=+m[2]; y=+m[3]; if(y < 100) y += 2000;
+    if(dmy){ d=a; mo=b-1; } else { mo=a-1; d=b; }
+    if(mo > 11 && d <= 12){ const t=d; d=mo+1; mo=t-1; }
+    s = s.replace(m[0], ' ');
+  }
+  else if((m = s.match(/(\d{1,2})\s+([A-Za-z]{3,})\.?,?\s+'?(\d{2,4})/)) && MONIDX[m[2].slice(0,3).toLowerCase()] != null){
+    d=+m[1]; mo=MONIDX[m[2].slice(0,3).toLowerCase()]; y=+m[3]; if(y<100) y+=2000; s = s.replace(m[0], ' ');
+  }
+  else if((m = s.match(/([A-Za-z]{3,})\s+(\d{1,2}),?\s+'?(\d{2,4})/)) && MONIDX[m[1].slice(0,3).toLowerCase()] != null){
+    mo=MONIDX[m[1].slice(0,3).toLowerCase()]; d=+m[2]; y=+m[3]; if(y<100) y+=2000; s = s.replace(m[0], ' ');
+  }
+  else { const t = Date.parse(s); return isNaN(t) ? null : new Date(t); }
+  const [h, mi] = parseTime(s);
+  const out = new Date(y, mo, d, h, mi);
+  return isNaN(out) ? null : out;
+}
+function parseBool(v){
+  if(v === true || v === 1) return true;
+  if(v === false || v === 0 || v == null) return false;
+  return /^(yes|y|true|1|x)$/i.test(String(v).trim());
+}
+function rawPct(v){
+  if(v == null || v === '') return null;
+  if(typeof v === 'number') return {n:v, s:false};
+  const s = String(v).trim();
+  // plain or scientific number, e.g. 0.26 or 8.9999999999999997E-2 (Sheets CSV writes tiny values this way)
+  if(/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return {n:+s, s:false};
+  const n = parseFloat(s.replace(/[^\d.\-]/g, ''));
+  return isNaN(n) ? null : {n, s:/%/.test(s)};
+}
+
+/* ================= import ================= */
+function aliasHit(h){ const n = norm(h); for(const f in ALIASES) if(ALIASES[f].includes(n)) return f; return null; }
+function findHeader(aoa){
+  let best = null;
+  for(let r = 0; r < Math.min(25, aoa.length); r++){
+    const row = aoa[r] || []; const hits = new Set();
+    row.forEach(h => { const f = aliasHit(h); if(f) hits.add(f); });
+    if(hits.has('name') && (hits.has('start') || hits.has('finish')) && (!best || hits.size > best.score)) best = {row:r, score:hits.size};
+  }
+  return best;
+}
+function autoMap(headers){
+  const n = headers.map(norm), map = {};
+  for(const [f] of FIELDS){
+    map[f] = -1;
+    for(const a of ALIASES[f]){ const i = n.indexOf(a); if(i >= 0){ map[f] = i; break; } }
+  }
+  return map;
+}
+const mapKey = headers => CONFIG.KEY + '.map.' + headers.map(norm).join('|').slice(0, 400);
+
+function sheetAOA(wb, sn){ return XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:''}); }
+
+function loadWorkbook(wb, name, opts={}){
+  S.wb = wb;
+  let best = null;
+  for(const sn of wb.SheetNames){
+    const aoa = sheetAOA(wb, sn); const h = findHeader(aoa);
+    if(h && (!best || h.score > best.score)) best = {sn, aoa, row:h.row, score:h.score};
+  }
+  if(!best){ const sn = wb.SheetNames[0]; best = {sn, aoa:sheetAOA(wb, sn), row:0, score:0}; }
+  const headers = (best.aoa[best.row] || []).map(h => String(h ?? '').trim());
+  // start from auto-detection, then apply any saved choices on top, so fields added in later
+  // versions of this page are still picked up for browsers that saved a mapping earlier
+  let map = autoMap(headers); const saved = lsGet(mapKey(headers));
+  if(saved){ try { Object.assign(map, JSON.parse(saved)); } catch(e) {} }
+  S.pending = {name, sn:best.sn, aoa:best.aoa, row:best.row, map, opts};
+  if(map.name < 0 || (map.start < 0 && map.finish < 0)) { openMapping(); toast('Please confirm which columns hold the task name and dates'); }
+  else applyData(opts);
+}
+
+/* Parse the rows into "base" tasks. The tree shown on screen is built from these by rebuildTree(),
+   either from Project's outline (Outline Level / WBS) or by grouping on columns such as Team › Work Order. */
+function applyData(opts={}){
+  const P = S.pending; if(!P) return;
+  const keep = !!opts.keepView && S.base.length > 0;
+  const prev = keep ? snapshotView() : null;
+  const {aoa, row:hRow, map} = P;
+  const headers = (aoa[hRow] || []).map(h => String(h ?? '').trim());
+  const get = (r, f) => (map[f] != null && map[f] >= 0) ? r[map[f]] : undefined;
+  const rows = aoa.slice(hRow + 1).map((r, i) => { if(r) r.__i = i; return r; }).filter(r => r && r.some(v => v !== '' && v != null));
+
+  // date order: explicit choice, else vote on text dates (a first part > 12 means day-first, a second part > 12 means month-first)
+  let dmy = true;
+  const forced = (S.live && S.live.input === CONFIG.SHEET) ? CONFIG.DATE_ORDER : '';
+  if(map.dateOrder === 'dmy') dmy = true;
+  else if(map.dateOrder === 'mdy') dmy = false;
+  else if(forced) dmy = forced !== 'mdy';
+  else {
+    let vd = 0, vm = 0;
+    rows.forEach(r => DATE_FIELDS.forEach(f => {
+      const v = get(r, f); if(typeof v !== 'string') return;
+      const m = v.match(/(?:^|\D)(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/); if(!m) return;
+      if(+m[1] > 12) vd++; if(+m[2] > 12) vm++;
+    }));
+    dmy = !(vm > vd);
+  }
+  S.dmy = dmy;
+
+  let scale100 = false;
+  rows.forEach(r => { const p = rawPct(get(r, 'pct')); if(p && (p.s || p.n > 1)) scale100 = true; });
+
+  const hasOutline = map.level >= 0 || map.wbs >= 0;
+  const base = [];
+  let skipped = 0, dataSD = null;
+  rows.forEach(r => {
+    if(!dataSD) dataSD = parseDate(get(r, 'sdate'), dmy);
+    const name = String(get(r, 'name') ?? '').trim();
+    // rows with no task name (blank or junk rows in the export) are left out
+    if(!name){ skipped++; return; }
+    const start = parseDate(get(r, 'start'), dmy), finish = parseDate(get(r, 'finish'), dmy);
+    const wbs = String(get(r, 'wbs') ?? '').trim();
+    let level = parseInt(get(r, 'level'), 10);
+    if(isNaN(level)) level = wbs === '0' ? 0 : (wbs ? wbs.split('.').filter(Boolean).length : 1);
+    const p = rawPct(get(r, 'pct'));
+    const durRaw = get(r, 'duration');
+    const durStr = (durRaw != null && durRaw !== '') ? String(durRaw).trim() : '';
+    base.push({
+      raw: r, name: name || '(unnamed)', oLevel: level, wbs,
+      id: map.id >= 0 ? String(get(r, 'id') ?? '').trim() : String(r.__i),
+      start: start || finish, finish: finish || start,
+      pct: p ? Math.max(0, Math.min(100, scale100 ? p.n : p.n * 100)) : null,
+      // a bare number (e.g. 117.5) has no unit, so show the elapsed time from the dates instead
+      durText: /^[\d.,]+$/.test(durStr) ? '' : durStr,
+      summaryCol: map.summary >= 0 ? parseBool(get(r, 'summary')) : null,
+      milestoneCol: map.milestone >= 0 ? parseBool(get(r, 'milestone')) : null,
+      critical: map.critical >= 0 ? parseBool(get(r, 'critical')) : null,   // set below from Total Slack if no Critical column
+      predsRaw: String(get(r, 'preds') ?? '').trim(),
+      res: String(get(r, 'res') ?? '').trim(),
+      team: String(get(r, 'team') ?? '').trim(),
+      notes: String(get(r, 'notes') ?? '').trim(),
+      bstart: parseDate(get(r, 'bstart'), dmy), bfinish: parseDate(get(r, 'bfinish'), dmy),
+      astart: parseDate(get(r, 'astart'), dmy), afinish: parseDate(get(r, 'afinish'), dmy),
+      deadline: parseDate(get(r, 'deadline'), dmy), link: String(get(r, 'link') ?? '').trim(),
+      exec: parseBool(get(r, 'exec')),
+      slack: (v => { const n = parseFloat(String(v ?? '').replace(/[^\d.\-eE]/g, '')); return isNaN(n) ? null : n; })(get(r, 'slack')),
+      cpct: parseInt(get(r, 'cpct'), 10) || 0,
+      children: [], parent: -1
+    });
+  });
+  if(!base.length){ toast('No task rows found – check the column matching'); openMapping(); return; }
+
+  base.forEach((t, i) => {
+    const next = base[i + 1];
+    t.oSummary = t.summaryCol === true || (hasOutline && !!next && next.oLevel > t.oLevel);
+    if(!t.id) t.id = String(i + 1);
+    if(!t.oSummary && t.pct == null) t.pct = 0;
+    if(t.critical === null) t.critical = t.slack !== null && t.slack <= 0 && (t.pct == null || t.pct < 99.5);
+    const zeroDur = /^0+(\.0+)?\s*[a-z]*\??$/i.test(t.durText);
+    t.milestone = t.milestoneCol != null ? t.milestoneCol : (!t.oSummary && ((t.start && t.finish && +t.start === +t.finish) || zeroDur));
+    if(!t.durText && t.start && t.finish) t.durText = fmtDurMs(t.finish - t.start);
+    t.key = 'r:' + t.id + ':' + t.name;
+    t.search = (t.name + ' ' + t.wbs + ' ' + t.id + ' ' + t.res + ' ' + t.notes + ' ' + t.raw.join(' ')).toLowerCase();
+    t.preds = []; t.succs = [];
+    // individual resources, e.g. "SMS-CTA[2],FREO-CC100" -> ["SMS-CTA", "FREO-CC100"]
+    t.resList = t.res.split(/[,;]/).map(x => x.replace(/\[[^\]]*\]/g, '').trim()).filter(x => x && x !== '-');
+  });
+  const byId = new Map(); base.forEach(t => byId.set(t.id, t));
+  base.forEach(t => {
+    if(!t.predsRaw) return;
+    t.predsRaw.split(/[,;]/).forEach(p => {
+      const m = p.trim().match(/^(\d+)\s*(FS|SS|FF|SF)?\s*([+-].*)?$/i); if(!m) return;
+      const o = byId.get(m[1]); if(!o) return;
+      const type = (m[2] || 'FS').toUpperCase(), lag = (m[3] || '').trim();
+      t.preds.push({t:o, type, lag}); o.succs.push({t, type, lag});
+    });
+  });
+
+  // commit
+  S.base = base; S.headers = headers; S.source = P.name; S.sheet = P.sn; S.hasOutline = hasOutline;
+  S.skipped = skipped; S.dataSD = dataSD; S.hasExec = map.exec >= 0;
+  // use the schedule's own status date unless the viewer has picked one
+  if(dataSD && !S.sdManual){ S.statusDate = dataSD; setStatusInput(); }
+  S.dateCols = new Set(DATE_FIELDS.map(f => map[f]).filter(i => i >= 0));
+  S.hasTimes = base.some(t => [t.start, t.finish].some(d => d && (d.getHours() || d.getMinutes())));
+  const firstSum = base.find(t => t.oSummary);
+  S.project = (firstSum && base.indexOf(firstSum) === 0) ? firstSum.name : P.name.replace(/\.[^.]+$/, '');
+  if(!keep || (S.group.g1 === 'outline' && !hasOutline)) S.group = hasOutline ? {g1:'outline', g2:-1} : defaultGroups(headers);
+  rebuildTree();
+  if(keep){
+    restoreView(prev);
+  } else {
+    S.selI = -1; S.q = ''; $('#q').value = ''; S.filter = 'all'; $('#filter').value = 'all'; S.fTeam = ''; S.fRes = '';
+    defaultExpand();
+    const st = base.filter(t => t.start).map(t => +t.start), fi = base.filter(t => t.finish).map(t => +t.finish);
+    const span = (Math.max(...fi) - Math.min(...st)) / DAY;
+    S.zoom = span <= 1.5 ? 'hour' : span <= 21 ? 'shift' : span <= 150 ? 'day' : span <= 900 ? 'week' : 'month';
+    closeCard(true);
+  }
+  map.dateOrder = map.dateOrder || 'auto';
+  lsSet(mapKey(headers), JSON.stringify(map));
+  buildGroupSelects(); buildPeopleFilters(); buildLevelButtons(); buildZoomButtons(); updateKPI(); updateSourceLabels();
+  $('#projName').firstChild.nodeValue = S.project;
+  layout(); refresh();
+  if(keep){
+    scroller.scrollTop = prev.top; scroller.scrollLeft = prev.left;
+    if(prev.cardOpen && S.selI >= 0) openCard(S.selI);
+  } else {
+    const st = base.filter(t => t.start).map(t => +t.start);
+    const viewW = scroller.clientWidth - S.gridW, sx = X(Math.min(...st)) - S.gridW - 30;
+    if(X(+S.statusDate) - S.gridW - sx < viewW * 0.85) scroller.scrollLeft = Math.max(0, sx); else scrollToNow(true);
+    scroller.scrollTop = 0;
+  }
+}
+
+function defaultGroups(headers){
+  const n = headers.map(norm);
+  const find = list => { for(const a of list){ const i = n.indexOf(a); if(i >= 0) return i; } return -1; };
+  const g1 = find(['team','crew','contractor','discipline','company','workcentre','workcenter']);
+  const g2 = find(['workorder','wonumber','ordernumber','order']);
+  if(g1 >= 0) return {g1, g2};
+  if(g2 >= 0) return {g1:g2, g2:-1};
+  return {g1:-1, g2:-1};
+}
+function groupLabel(c, k, items){
+  const h = S.headers[c] || 'value';
+  if(!k) return `(No ${h})`;
+  if(['workorder','wonumber','ordernumber','order'].includes(norm(h))){
+    const dc = S.headers.findIndex(x => ['wo','wodescription','workorderdescription','orderdescription','wotext'].includes(norm(x)));
+    const d = dc >= 0 ? String(items[0].raw[dc] ?? '').trim() : '';
+    return d ? `${k} · ${d}` : `WO ${k}`;
+  }
+  return k;
+}
+function rebuildTree(){
+  const out = [];
+  S.base.forEach(t => { t.inTree = false; t.children = []; t.parent = -1; });
+  const push = (t, parent, level) => {
+    t.i = out.length; t.parent = parent; t.level = level; t.inTree = true;
+    if(parent >= 0) out[parent].children.push(t.i);
+    out.push(t);
+  };
+  const outline = S.group.g1 === 'outline';
+  if(outline){
+    const stack = [];
+    S.base.forEach(t => {
+      while(stack.length && out[stack[stack.length - 1]].level >= t.oLevel) stack.pop();
+      push(t, stack.length ? stack[stack.length - 1] : -1, t.oLevel);
+      stack.push(t.i);
+    });
+  } else {
+    const cols = (typeof S.group.g1 === 'number' && S.group.g1 >= 0) ? [S.group.g1, S.group.g2].filter(c => typeof c === 'number' && c >= 0) : [];
+    const leaves = S.base.filter(t => !t.oSummary);
+    const minS = a => Math.min(...a.map(t => t.start ? +t.start : Infinity));
+    const addGroups = (list, depth, parent, lvl, pkey) => {
+      if(depth >= cols.length){ list.forEach(t => push(t, parent, lvl)); return; }
+      const c = cols[depth], m = new Map();
+      list.forEach(t => { const k = String(t.raw[c] ?? '').trim(); if(!m.has(k)) m.set(k, []); m.get(k).push(t); });
+      [...m.entries()].sort((a, b) => minS(a[1]) - minS(b[1])).forEach(([k, items]) => {
+        const g = {synthetic:true, name:groupLabel(c, k, items), raw:[], id:'', wbs:'', durText:'', critical:false, pct:null,
+          preds:[], succs:[], res:'', notes:'', key:pkey + '/' + k, groupCol:S.headers[c], groupVal:k, children:[], milestone:false};
+        push(g, parent, lvl);
+        addGroups(items, depth + 1, g.i, lvl + 1, g.key);
+      });
+    };
+    addGroups(leaves, 0, -1, 1, 'g');
+  }
+  out.forEach(t => { t.summary = !!t.synthetic || t.children.length > 0 || (outline && t.summaryCol === true); });
+  for(let i = out.length - 1; i >= 0; i--){
+    const t = out[i]; if(!t.children.length) continue;
+    const ch = t.children.map(c => out[c]);
+    const mn = f => { const v = ch.filter(c => c[f]).map(c => +c[f]); return v.length ? new Date(Math.min(...v)) : null; };
+    const mx = f => { const v = ch.filter(c => c[f]).map(c => +c[f]); return v.length ? new Date(Math.max(...v)) : null; };
+    if(t.synthetic || !t.start) t.start = mn('start');
+    if(t.synthetic || !t.finish) t.finish = mx('finish');
+    if(t.synthetic){ t.bstart = mn('bstart'); t.bfinish = mx('bfinish'); t.critical = ch.some(c => c.critical); }
+    if(t.synthetic || t.pct == null){
+      let w = 0, s = 0;
+      ch.forEach(c => { const d = Math.max(HOUR / 4, (c.finish && c.start) ? c.finish - c.start : 0); w += d; s += d * (c.pct || 0); });
+      t.pct = w ? s / w : 0;
+    }
+    if(t.synthetic){
+      t.durText = (t.start && t.finish) ? fmtDurMs(t.finish - t.start) : '';
+      t.search = (t.name + ' ' + t.groupCol).toLowerCase();
+    }
+  }
+  out.forEach(t => { if(t.pct == null) t.pct = 0; });
+  if(!outline){
+    const cnt = [];
+    out.forEach(t => { cnt.length = t.level; cnt[t.level - 1] = (cnt[t.level - 1] || 0) + 1; if(t.synthetic) t.wbs = cnt.slice(0, t.level).map(n => n || 1).join('.'); });
+  }
+  S.tasks = sortTree(out);
+  S.minLevel = Math.min(...out.map(t => t.level)); S.maxLevel = Math.max(...out.map(t => t.level));
+}
+// Sort siblings within each parent (the WBS structure is kept). Ties keep WBS order.
+function sortTree(out){
+  const k = S.sort || 'wbs';
+  if(k === 'wbs') return out;
+  const last = Number.POSITIVE_INFINITY;
+  const key = {
+    start:  t => t.start ? +t.start : last,
+    finish: t => t.finish ? +t.finish : last,
+    pct:    t => t.pct == null ? last : t.pct,
+    slack:  t => t.slack == null ? last : t.slack,
+  }[k];
+  const txt = k === 'team' ? (t => t.team || '') : k === 'name' ? (t => t.name || '') : null;
+  const cmp = (a, b) => {
+    if(txt){
+      const x = txt(a), y = txt(b);
+      if(!x !== !y) return x ? -1 : 1;                       // blanks last
+      const c = x.localeCompare(y, undefined, {numeric:true, sensitivity:'base'});
+      if(c) return c;
+      return (a.start ? +a.start : last) - (b.start ? +b.start : last) || a.i - b.i;
+    }
+    return (key(a) - key(b)) || a.i - b.i;
+  };
+  const res = [];
+  const walk = t => { const old = t.children; res.push(t); old.map(c => out[c]).sort(cmp).forEach(walk); };
+  out.filter(t => t.parent < 0).sort(cmp).forEach(walk);
+  const map = new Map(res.map((t, n) => [t.i, n]));
+  res.forEach(t => { t.children = t.children.map(c => map.get(c)); if(t.parent >= 0) t.parent = map.get(t.parent); });
+  res.forEach((t, n) => { t.i = n; });
+  return res;
+}
+function defaultExpand(){ if(S.tasks.length <= 120) expandAll(); else expandTo(S.minLevel + 1); }
+function snapshotView(){
+  return {
+    exp: new Set(S.tasks.filter(t => S.expanded.has(t.i)).map(t => t.key)),
+    sel: S.selI >= 0 && S.tasks[S.selI] ? S.tasks[S.selI].key : null,
+    top: scroller.scrollTop, left: scroller.scrollLeft, zoom: S.zoom,
+    cardOpen: $('#card').classList.contains('open')
+  };
+}
+function restoreView(prev){
+  S.expanded = new Set(S.tasks.filter(t => prev.exp.has(t.key)).map(t => t.i));
+  S.zoom = prev.zoom;
+  const sel = prev.sel ? S.tasks.find(t => t.key === prev.sel) : null;
+  S.selI = sel ? sel.i : -1;
+}
+
+
+/* ================= status & visibility ================= */
+function status(t){
+  const sd = +S.statusDate;
+  if(t.pct >= 99.5) return 'done';
+  if(t.finish && +t.finish < sd) return 'late';
+  if(t.start && +t.start < sd && t.pct <= 0) return 'late';
+  return t.pct > 0 ? 'ip' : 'ns';
+}
+function matches(t){
+  const q = S.q.trim().toLowerCase();
+  if(q && !t.search.includes(q)) return false;
+  if(S.fTeam && (t.summary || t.team !== S.fTeam)) return false;
+  if(S.fRes && (t.summary || !(t.resList || []).includes(S.fRes))) return false;
+  const sd = +S.statusDate;
+  switch(S.filter){
+    case 'all': return true;
+    case 'open': return !t.summary && status(t) !== 'done';   // in progress + not started (incl. late)
+    case 'critical': return !t.summary && t.critical;
+    case 'cpct': return t.cpct === 1 || t.cpct === 2;
+    case 'cp': return t.cpct === 1;
+    case 'ct': return t.cpct === 2;
+    // by % complete only, whatever the dates (late tasks are included)
+    case 'ns': return !t.summary && (t.pct || 0) <= 0;
+    case 'ip': return !t.summary && t.pct > 0 && t.pct < 99.5;
+    case 'ms': return t.milestone;
+    case 'exec': return !!t.exec;
+    case 'wbs': return t.summary;
+    case 'late': case 'done': return !t.summary && status(t) === S.filter;
+    case 'next12': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 12*HOUR;
+    case 'next24': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 24*HOUR;
+    case 'next7d': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 7*DAY;
+  }
+  return true;
+}
+function buildVisible(){
+  const n = S.tasks.length, active = S.filter !== 'all' || S.q.trim() || S.fTeam || S.fRes;
+  let inc = null;
+  if(active){
+    inc = new Uint8Array(n);
+    S.tasks.forEach(t => { if(matches(t)){ let k = t.i; while(k >= 0 && !inc[k]){ inc[k] = 1; k = S.tasks[k].parent; } } });
+  }
+  const shown = new Uint8Array(n), vis = [];
+  for(const t of S.tasks){
+    if(inc && !inc[t.i]) continue;
+    if(t.parent >= 0 && !(shown[t.parent] && S.expanded.has(t.parent))) continue;
+    shown[t.i] = 1; vis.push(t.i);
+  }
+  S.visible = vis;
+  $('#footCount').textContent = active ? `Showing ${vis.length} of ${n} rows (filtered)` : `${n} rows`;
+}
+function applyFilter(){
+  if(S.filter !== 'all' || S.q.trim() || S.fTeam || S.fRes){
+    S.tasks.forEach(t => { if(matches(t)){ let k = t.parent; while(k >= 0){ S.expanded.add(k); k = S.tasks[k].parent; } } });
+  }
+  refresh();
+}
+function expandTo(L){ S.expanded = new Set(S.tasks.filter(t => t.summary && t.level < L).map(t => t.i)); }
+function expandAll(){ S.expanded = new Set(S.tasks.filter(t => t.summary).map(t => t.i)); }
+function toggle(i){ S.expanded.has(i) ? S.expanded.delete(i) : S.expanded.add(i); refresh(); }
+
+/* ================= time axis helpers ================= */
+function floorU(d, u){
+  d = new Date(d);
+  switch(u){
+    case 'hour': d.setMinutes(0,0,0); break;
+    case 'h6': d.setHours(Math.floor(d.getHours()/6)*6,0,0,0); break;
+    case 'day': d.setHours(0,0,0,0); break;
+    case 'week': d.setHours(0,0,0,0); d.setDate(d.getDate() - (d.getDay() + 6) % 7); break;
+    case 'month': d.setHours(0,0,0,0); d.setDate(1); break;
+    case 'year': d.setHours(0,0,0,0); d.setMonth(0,1); break;
+  }
+  return d;
+}
+function nextU(d, u){
+  d = new Date(d);
+  switch(u){
+    case 'hour': d.setHours(d.getHours()+1); break;
+    case 'h6': d.setHours(d.getHours()+6); break;
+    case 'day': d.setDate(d.getDate()+1); break;
+    case 'week': d.setDate(d.getDate()+7); break;
+    case 'month': d.setMonth(d.getMonth()+1); break;
+    case 'year': d.setFullYear(d.getFullYear()+1); break;
+  }
+  return d;
+}
+function tickLabel(d, u){
+  switch(u){
+    case 'hour': return p2(d.getHours());
+    case 'h6': return p2(d.getHours()) + ':00';
+    case 'day': return 'SMTWTFS'[d.getDay()] + ' ' + d.getDate();
+    case 'week': return d.getDate() + ' ' + MON[d.getMonth()];
+    case 'month': return MON[d.getMonth()];
+  }
+}
+function topLabel(d, u){
+  if(u === 'day') return `${WD[d.getDay()]} ${d.getDate()} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+  if(u === 'month') return `${MONL[d.getMonth()]} ${d.getFullYear()}`;
+  return String(d.getFullYear());
+}
+const X = t => S.gridW + (t - S.t0) * S.px;
+
+/* ================= layout & rendering ================= */
+const scroller = $('#scroller');
+function layout(){
+  const narrow = innerWidth < 760;
+  S.cols = COLS.filter(c => !(narrow && c.narrowHide)).map(c => ({...c, w: narrow && c.wn ? c.wn : c.w}));
+  S.gridW = S.cols.reduce((a, c) => a + c.w, 0) + 2;
+  const Z = ZOOMS[S.zoom]; S.px = Z.px / Z.ms;
+  let mn = Infinity, mx = -Infinity;
+  S.tasks.forEach(t => [t.start, t.finish, t.bstart, t.bfinish, t.deadline].forEach(d => { if(d){ mn = Math.min(mn, +d); mx = Math.max(mx, +d); } }));
+  if(!isFinite(mn)){ mn = Date.now(); mx = mn + DAY; }
+  const pad = Math.max(Z.ms, (mx - mn) * 0.02);
+  S.t0 = +floorU(new Date(mn - pad), Z.top);
+  S.t1 = mx + pad * 4;
+  const tlW = Math.ceil((S.t1 - S.t0) * S.px) + 260;
+  S.canvasW = S.gridW + tlW;
+  $('#canvas').style.width = S.canvasW + 'px';
+  $('#hdr').style.width = S.canvasW + 'px';
+  $('#axis').style.width = S.canvasW + 'px';
+  $('#hcells').style.width = S.gridW + 'px';
+  $('#cover').style.width = S.gridW + 'px';
+  $('#hcells').innerHTML = S.cols.map(c => `<div style="width:${c.w}px;${c.k==='pct'?'justify-content:flex-end':''}">${c.t}</div>`).join('');
+}
+function refresh(){
+  buildVisible();
+  const h = Math.max(S.visible.length * RH, scroller.clientHeight - HDR);
+  $('#body').style.height = h + 'px';
+  $('#gridLayer').style.width = S.canvasW + 'px';
+  render();
+}
+let rafId = 0;
+function render(){ cancelAnimationFrame(rafId); rafId = requestAnimationFrame(() => { renderAxis(); renderRows(); }); }
+
+function renderAxis(){
+  const Z = ZOOMS[S.zoom], sl = scroller.scrollLeft, w = scroller.clientWidth;
+  const tA = S.t0 + (sl - Z.ms * S.px) / S.px, tB = S.t0 + (sl + w) / S.px + Z.ms;
+  let ax = '', gl = '', guard = 0;
+  for(let d = floorU(new Date(Math.max(S.t0, tA)), Z.top); +d < tB && guard++ < 400; d = nextU(d, Z.top)){
+    const x = X(+d), x2 = X(+nextU(d, Z.top));
+    ax += `<div class="tt" style="left:${x}px;width:${x2 - x}px"><span style="left:${S.gridW}px">${topLabel(d, Z.top)}</span></div>`;
+    gl += `<div class="gl2" style="left:${x}px"></div>`;
+  }
+  guard = 0;
+  for(let d = floorU(new Date(Math.max(S.t0, tA)), Z.unit); +d < tB && guard++ < 3000; d = nextU(d, Z.unit)){
+    const x = X(+d), x2 = X(+nextU(d, Z.unit));
+    const we = Z.unit === 'day' && (d.getDay() === 0 || d.getDay() === 6);
+    ax += `<div class="bt${we ? ' we' : ''}" style="left:${x}px;width:${x2 - x}px">${tickLabel(d, Z.unit)}</div>`;
+    gl += we ? `<div class="we" style="left:${x}px;width:${x2 - x}px"></div>` : `<div class="gl" style="left:${x}px"></div>`;
+  }
+  const nx = X(+S.statusDate);
+  if(+S.statusDate >= S.t0 && +S.statusDate <= S.t1){
+    ax += `<div class="nowh" style="left:${nx}px"><span>${fmtShort(S.statusDate)}</span></div>`;
+    gl += `<div class="nowl" style="left:${nx}px"></div>`;
+  }
+  $('#axis').innerHTML = ax; $('#gridLayer').innerHTML = gl;
+}
+
+function rowHTML(t, vi){
+  const st = status(t), lvl = t.level - S.minLevel, pct = Math.round(t.pct);
+  let cells = '';
+  for(const c of S.cols){
+    switch(c.k){
+      case 'wbs': cells += `<div class="c wbs" style="width:${c.w}px">${esc(t.wbs || t.id)}</div>`; break;
+      case 'name': cells += `<div class="c name" style="width:${c.w}px;padding-left:${4 + lvl * 14}px"><span class="chev">${t.summary ? (S.expanded.has(t.i) ? '▾' : '▸') : ''}</span><span class="dot ${st}" title="${ST_LABEL[st]}"></span><span class="nm" title="${esc(t.name)}">${esc(t.name)}</span>${t.summary ? '<span class="info" data-act="card" title="Open summary card">ⓘ</span>' : ''}</div>`; break;
+      case 'team': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.team || '')}">${esc(t.team || '')}</div>`; break;
+      case 'res': cells += `<div class="c" style="width:${c.w}px" title="${esc(t.res || '')}">${esc(t.res || '')}</div>`; break;
+      case 'start': cells += `<div class="c dt" style="width:${c.w}px">${fmtShort(t.start)}</div>`; break;
+      case 'finish': cells += `<div class="c dt" style="width:${c.w}px">${fmtShort(t.finish)}</div>`; break;
+      case 'dur': cells += `<div class="c num" style="width:${c.w}px">${esc(t.durText)}</div>`; break;
+      case 'pct': cells += `<div class="c num" style="width:${c.w}px">${pct}%</div>`; break;
+    }
+  }
+  let bars = '';
+  if(t.bstart && t.bfinish && !t.milestone){
+    const b1 = X(+t.bstart), b2 = X(+t.bfinish);
+    bars += `<div class="bl" style="left:${b1}px;width:${Math.max(2, b2 - b1)}px"></div>`;
+  }
+  if(t.start && t.finish){
+    const x1 = X(+t.start), x2 = X(+t.finish); let lx = x2 + 8;
+    if(t.milestone){
+      bars += `<div class="ms ${t.critical ? 'crit' : ''} ${st === 'done' ? 'done' : ''}" data-act="card" style="left:${x1 - 6}px"></div>`;
+      lx = x1 + 12;
+    } else if(t.summary){
+      bars += `<div class="sbar" data-act="card" style="left:${x1}px;width:${Math.max(4, x2 - x1)}px"><div class="pg" style="width:${pct}%"></div></div>`;
+      lx = x2 + 10;
+    } else {
+      const cls = st === 'done' ? 'done' : (t.critical ? 'crit' : '');
+      bars += `<div class="bar ${cls} ${st === 'late' ? 'late' : ''}" data-act="card" style="left:${x1}px;width:${Math.max(3, x2 - x1)}px"><div class="pg" style="width:${pct}%"></div></div>`;
+    }
+    if(!t.summary) bars += `<div class="lbl" style="left:${lx}px">${esc(t.name)}${t.res ? ' · ' + esc(t.res) : ''}</div>`;
+  }
+  if(t.deadline){
+    const miss = t.finish && +t.finish > +t.deadline;
+    bars += `<div class="dl${miss ? ' miss' : ''}" style="left:${X(+t.deadline) - 5}px" title="Deadline ${fmtLong(t.deadline)}${miss ? ' – finish is after the deadline' : ''}"></div>`;
+  }
+  return `<div class="row${t.summary ? ' sum' : ''}${t.i === S.selI ? ' sel' : ''}" data-i="${t.i}" style="top:${vi * RH}px;width:${S.canvasW}px"><div class="cells" style="width:${S.gridW}px">${cells}</div>${bars}</div>`;
+}
+function renderRows(){
+  if(!S.tasks.length){ $('#rows').innerHTML = '<div class="empty">No schedule loaded.</div>'; return; }
+  if(!S.visible.length){ $('#rows').innerHTML = `<div class="empty" style="position:sticky;left:0;width:${scroller.clientWidth}px">No tasks match this filter.</div>`; return; }
+  const top = scroller.scrollTop, h = scroller.clientHeight;
+  const a = Math.max(0, Math.floor(top / RH) - 8), b = Math.min(S.visible.length, Math.ceil((top + h) / RH) + 8);
+  let html = '';
+  for(let vi = a; vi < b; vi++) html += rowHTML(S.tasks[S.visible[vi]], vi);
+  $('#rows').innerHTML = html;
+}
+
+/* ================= KPI strip ================= */
+function updateKPI(){
+  const leaves = S.base.filter(t => !t.oSummary);
+  let w = 0, s = 0; const c = {done:0, late:0, ip:0, ns:0};
+  leaves.forEach(t => { const d = Math.max(HOUR/4, (t.finish && t.start) ? t.finish - t.start : 0); w += d; s += d * t.pct; c[status(t)]++; });
+  const pct = w ? Math.round(s / w) : 0;
+  $('#kpi').innerHTML = `
+    <div class="k"><span>Overall complete</span><div style="display:flex;align-items:center;gap:8px"><b>${pct}%</b><div class="pbar"><i style="width:${pct}%"></i></div></div></div>
+    <div class="k"><span>Tasks</span><b>${leaves.length}</b></div>
+    <div class="k"><span>Complete</span><b>${c.done}</b></div>
+    <div class="k"><span>In progress</span><b>${c.ip}</b></div>
+    <div class="k"><span>Late</span><b style="color:${c.late ? '#ffb257' : 'inherit'}">${c.late}</b></div>`;
+}
+
+/* ================= job card ================= */
+function linkHTML(i, extra=''){
+  const t = S.tasks[i];
+  return `<a data-goto="${i}"><em>${esc(t.id)}</em><span>${esc(t.name)}${extra}</span><span class="dot ${status(t)}"></span></a>`;
+}
+function fmtRaw(v, col){
+  if(v == null || v === '') return '';
+  if(S.dateCols.has(col)){ const d = parseDate(v); return d ? fmtLong(d) : String(v); }
+  if(v instanceof Date) return fmtLong(v);
+  return String(v);
+}
+function openCard(i){
+  const t = S.tasks[i]; if(!t) return;
+  S.selI = i;
+  const st = status(t), pct = Math.round(t.pct);
+  const crumbs = []; let k = t.parent; while(k >= 0){ crumbs.unshift(S.tasks[k].name); k = S.tasks[k].parent; }
+  let html = `<div class="ch">
+    <div class="crumb">${crumbs.map(esc).join(' › ') || '&nbsp;'}</div>
+    <div class="tag">${t.wbs ? 'WBS ' + esc(t.wbs) + ' · ' : ''}ID ${esc(t.id)}</div>
+    <h2>${esc(t.name)}</h2>
+    <div class="pills"><span class="pill ${st}">${ST_LABEL[st]}</span>${t.critical ? '<span class="pill crit">Critical</span>' : ''}${t.cpct === 1 ? '<span class="pill crit">CP</span>' : t.cpct === 2 ? '<span class="pill late">CT</span>' : ''}${t.milestone ? '<span class="pill">Milestone</span>' : ''}${t.summary ? '<span class="pill">Summary</span>' : ''}${t.exec ? '<span class="pill">Exec summary</span>' : ''}</div>
+    <button class="x" id="cardX" title="Close (Esc)">×</button></div><div class="cb">`;
+  html += `<div class="big"><b>${pct}%</b><div class="pbar"><i style="width:${pct}%;background:${st === 'done' ? 'var(--done)' : st === 'late' ? 'var(--late)' : 'var(--task)'}"></i></div></div>`;
+  html += `<div class="kv">
+    <div><span>Start</span><b>${fmtLong(t.start)}</b></div>
+    <div><span>Finish</span><b>${fmtLong(t.finish)}</b></div>
+    <div><span>Duration</span><b>${esc(t.durText) || '—'}</b></div>
+    <div><span>Resources</span><b>${esc(t.res) || '—'}</b></div>
+    ${t.team ? `<div class="full"><span>Team</span><b>${esc(t.team)}</b></div>` : ''}`;
+  if(t.bstart || t.bfinish){
+    html += `<div><span>Baseline start</span><b>${fmtLong(t.bstart)}</b></div><div><span>Baseline finish</span><b>${fmtLong(t.bfinish)}</b></div>`;
+    if(t.bfinish && t.finish){
+      const v = t.finish - t.bfinish;
+      html += `<div class="full"><span>Finish variance vs baseline</span><b class="${v > 0 ? 'var-bad' : v < 0 ? 'var-good' : ''}">${v === 0 ? 'On baseline' : (v > 0 ? '+' : '−') + fmtDurMs(v) + (v > 0 ? ' late' : ' early')}</b></div>`;
+    }
+  }
+  if(t.astart || t.afinish) html += `<div><span>Actual start</span><b>${fmtLong(t.astart)}</b></div><div><span>Actual finish</span><b>${fmtLong(t.afinish)}</b></div>`;
+  if(t.deadline){
+    const miss = t.finish && +t.finish > +t.deadline;
+    html += `<div class="full"><span>Deadline</span><b class="${miss ? 'var-bad' : ''}">${fmtLong(t.deadline)}${miss ? ' – finish is ' + fmtDurMs(t.finish - t.deadline) + ' after the deadline' : ''}</b></div>`;
+  }
+  if(t.link){
+    const ok = /^https?:\/\//i.test(t.link);
+    html += `<div class="full"><span>Link</span><b>${ok ? `<a href="${esc(t.link)}" target="_blank" rel="noopener">${esc(t.link)} ↗</a>` : esc(t.link)}</b></div>`;
+  }
+  html += `</div>`;
+
+  // Project notes – shown near the top of the card so they're seen first
+  if(t.notes) html += `<div class="sec">Notes from Project</div><div class="notes">${esc(t.notes)}</div>`;
+  if(t.synthetic) html += `<div class="kv"><div class="full"><span>Grouped by</span><b>${esc(t.groupCol)}: ${esc(t.groupVal || '(blank)')}</b></div></div>`;
+  if(t.summary){
+    const leaves = []; (function walk(j){ S.tasks[j].children.forEach(c => S.tasks[c].summary ? walk(c) : leaves.push(S.tasks[c])); })(i);
+    const c = {done:0, ip:0, late:0, ns:0}; leaves.forEach(l => c[status(l)]++);
+    html += `<div class="sec">Tasks under this level (${leaves.length})</div><div class="stats">
+      <div><b style="color:var(--done)">${c.done}</b><span>Complete</span></div><div><b style="color:var(--task)">${c.ip}</b><span>In progress</span></div>
+      <div><b style="color:var(--late)">${c.late}</b><span>Late</span></div><div><b>${c.ns}</b><span>Not started</span></div></div>`;
+    html += `<div class="sec">Next level down</div><div class="links">${t.children.map(j => linkHTML(j, ' <em>' + Math.round(S.tasks[j].pct) + '%</em>')).join('')}</div>`;
+  }
+  const pr = t.preds.filter(p => p.t.inTree), su = t.succs.filter(p => p.t.inTree);
+  if(pr.length) html += `<div class="sec">Predecessors</div><div class="links">${pr.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
+  if(su.length) html += `<div class="sec">Successors</div><div class="links">${su.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
+  const rows = S.headers.map((h, ci) => [h, fmtRaw(t.raw[ci], ci)]).filter(([h, v]) => h && v !== '');
+  if(rows.length) html += `<div class="sec">All fields from the export</div><table class="all">${rows.map(([h, v]) => `<tr><td>${esc(h)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
+  html += `</div><div class="cf"><button id="cPrev" title="Previous row (↑)">◀ Prev</button><button id="cNext" title="Next row (↓)">Next ▶</button><span class="sp"></span><button id="cCopy">Copy details</button><button id="cShow">Show in Gantt</button></div>`;
+  const card = $('#card'); card.innerHTML = html; card.classList.add('open');
+  render();
+}
+function closeCard(silent){ $('#card').classList.remove('open'); if(!silent){ S.selI = -1; render(); } }
+function stepCard(dir){
+  const vi = S.visible.indexOf(S.selI); const n = vi + dir;
+  if(n < 0 || n >= S.visible.length) return;
+  openCard(S.visible[n]); ensureRowVisible(n);
+}
+function ensureRowVisible(vi){
+  const y = vi * RH, top = scroller.scrollTop, h = scroller.clientHeight - HDR;
+  if(y < top) scroller.scrollTop = y; else if(y + RH > top + h) scroller.scrollTop = y - h + RH * 2;
+}
+function gotoTask(i, open=true){
+  let k = S.tasks[i].parent; while(k >= 0){ S.expanded.add(k); k = S.tasks[k].parent; }
+  buildVisible();
+  if(!S.visible.includes(i)){ S.filter = 'all'; $('#filter').value = 'all'; S.q = ''; $('#q').value = ''; S.fTeam = ''; S.fRes = ''; buildPeopleFilters(); buildVisible(); }
+  refresh();
+  const vi = S.visible.indexOf(i), t = S.tasks[i];
+  scroller.scrollTop = Math.max(0, vi * RH - scroller.clientHeight / 3);
+  if(t.start) scroller.scrollLeft = Math.max(0, X(+t.start) - S.gridW - 120);
+  if(open) openCard(i); else render();
+}
+function cardText(t){
+  const lines = [`${t.wbs ? t.wbs + ' ' : ''}${t.name}`, `Status: ${ST_LABEL[status(t)]} (${Math.round(t.pct)}%)${t.critical ? ' – CRITICAL' : ''}`,
+    `Start: ${fmtLong(t.start)}`, `Finish: ${fmtLong(t.finish)}`, `Duration: ${t.durText}`];
+  if(t.team) lines.push(`Team: ${t.team}`);
+  if(t.res) lines.push(`Resources: ${t.res}`);
+  S.headers.forEach((h, ci) => { const v = fmtRaw(t.raw[ci], ci); if(h && v !== '' && !/^(name|start|finish|duration|resource names|% complete)$/i.test(h)) lines.push(`${h}: ${v}`); });
+  return lines.join('\n');
+}
+
+/* ================= controls ================= */
+function buildLevelButtons(){
+  let h = '';
+  for(let L = S.minLevel; L <= S.maxLevel; L++) h += `<button data-l="${L}">${L}</button>`;
+  h += `<button data-l="all">All</button>`;
+  $('#levels').innerHTML = h;
+}
+function buildZoomButtons(){
+  $('#zooms').innerHTML = Object.entries(ZOOMS).map(([k, z]) => `<button data-z="${k}" class="${k === S.zoom ? 'on' : ''}">${z.label}</button>`).join('');
+}
+function setStatusInput(){ const d = S.statusDate; $('#sdate').value = `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}T${p2(d.getHours())}:${p2(d.getMinutes())}`; }
+function scrollToNow(quiet){
+  const x = X(+S.statusDate) - S.gridW - (scroller.clientWidth - S.gridW) * 0.3;
+  if(+S.statusDate < S.t0 || +S.statusDate > S.t1){ if(!quiet) toast('Status date is outside the schedule'); scroller.scrollLeft = 0; return; }
+  scroller.scrollLeft = Math.max(0, x);
+}
+
+$('#levels').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  b.dataset.l === 'all' ? expandAll() : expandTo(+b.dataset.l); refresh();
+});
+$('#zooms').addEventListener('click', e => {
+  const b = e.target.closest('button'); if(!b) return;
+  // keep the time at the left edge of the timeline in view
+  const tLeft = S.t0 + scroller.scrollLeft / S.px;
+  S.zoom = b.dataset.z; buildZoomButtons(); layout(); refresh();
+  scroller.scrollLeft = Math.max(0, (tLeft - S.t0) * S.px);
+});
+let qT; $('#q').addEventListener('input', e => { clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; applyFilter(); scroller.scrollTop = 0; }, 160); });
+$('#filter').addEventListener('change', e => { S.filter = e.target.value; applyFilter(); scroller.scrollTop = 0; });
+$('#sdate').addEventListener('change', e => { const d = parseDate(e.target.value.replace('T', ' ')); if(d){ S.statusDate = d; S.sdManual = !(S.dataSD && +d === +S.dataSD); updateKPI(); refresh(); if(S.selI >= 0) openCard(S.selI); } });
+$('#btnNow').addEventListener('click', () => scrollToNow(false));
+$('#btnLoad').addEventListener('click', () => $('#file').click());
+$('#file').addEventListener('change', e => { const f = e.target.files[0]; if(f) readFile(f); e.target.value = ''; });
+$('#btnHelp').addEventListener('click', () => $('#helpOvl').classList.add('open'));
+$('#helpClose').addEventListener('click', () => $('#helpOvl').classList.remove('open'));
+$('#btnSample').addEventListener('click', () => { $('#helpOvl').classList.remove('open'); loadSample(); });
+$('#btnMapOpen').addEventListener('click', () => { $('#helpOvl').classList.remove('open'); if(S.pending) openMapping(); else toast('Load an Excel file first'); });
+
+scroller.addEventListener('scroll', render, {passive:true});
+addEventListener('resize', () => { layout(); refresh(); });
+
+$('#rows').addEventListener('click', e => {
+  const row = e.target.closest('.row'); if(!row) return;
+  const i = +row.dataset.i, t = S.tasks[i];
+  if(e.target.closest('[data-act="card"]')) return openCard(i);
+  if(t.summary) toggle(i); else openCard(i);
+});
+$('#card').addEventListener('click', async e => {
+  const a = e.target.closest('[data-goto]'); if(a) return gotoTask(+a.dataset.goto);
+  const id = e.target.id;
+  if(id === 'cardX') closeCard();
+  else if(id === 'cPrev') stepCard(-1);
+  else if(id === 'cNext') stepCard(1);
+  else if(id === 'cShow') gotoTask(S.selI, true);
+  else if(id === 'cCopy'){ try { await navigator.clipboard.writeText(cardText(S.tasks[S.selI])); toast('Job card copied – paste into an email or Teams'); } catch(err){ toast('Copy was blocked by the browser'); } }
+});
+addEventListener('keydown', e => {
+  if(e.target.matches('input,select,textarea')) return;
+  if(e.key === 'Escape'){ if($('.ovl.open')) $$ovlClose(); else closeCard(); }
+  if($('#card').classList.contains('open')){
+    if(e.key === 'ArrowDown'){ e.preventDefault(); stepCard(1); }
+    if(e.key === 'ArrowUp'){ e.preventDefault(); stepCard(-1); }
+  }
+});
+function $$ovlClose(){ document.querySelectorAll('.ovl.open').forEach(o => o.classList.remove('open')); }
+
+/* tooltip */
+const tip = $('#tip');
+$('#rows').addEventListener('mousemove', e => {
+  const b = e.target.closest('.bar,.sbar,.ms'); if(!b){ tip.style.display = 'none'; return; }
+  const t = S.tasks[+b.closest('.row').dataset.i];
+  tip.innerHTML = `<b>${esc(t.name)}</b><br>${fmtLong(t.start)} → ${fmtLong(t.finish)}<br>${esc(t.durText)} · ${Math.round(t.pct)}% · ${ST_LABEL[status(t)]}${t.critical ? ' · Critical' : ''}${t.res ? '<br>' + esc(t.res) : ''}`;
+  tip.style.display = 'block';
+  const x = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), y = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = x + 'px'; tip.style.top = y + 'px';
+});
+$('#rows').addEventListener('mouseleave', () => tip.style.display = 'none');
+
+/* drag & drop */
+let dragN = 0;
+addEventListener('dragenter', e => { e.preventDefault(); if(!isSched()) return; dragN++; $('#drop').classList.add('on'); });
+addEventListener('dragleave', e => { dragN = Math.max(0, dragN - 1); if(!dragN) $('#drop').classList.remove('on'); });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classList.remove('on'); if(!isSched()) return; const f = e.dataTransfer.files[0]; if(f) readFile(f); });
+
+/* scheduler mode – Load Excel / Google Sheet / drag-drop are hidden until unlocked */
+function isSched(){ return document.body.classList.contains('sched'); }
+function setSched(on){
+  document.body.classList.toggle('sched', on);
+  try { on ? sessionStorage.setItem(CONFIG.KEY + '.sched', '1') : sessionStorage.removeItem(CONFIG.KEY + '.sched'); } catch(e) {}
+}
+async function sha256(t){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+let brandTaps = 0, brandTimer = null;
+$('.brand').addEventListener('click', () => {
+  brandTaps++; clearTimeout(brandTimer); brandTimer = setTimeout(() => brandTaps = 0, 2000);
+  if(brandTaps >= 5 && !isSched()){
+    brandTaps = 0; $('#pinIn').value = ''; $('#pinErr').textContent = '';
+    $('#pinOvl').classList.add('open'); setTimeout(() => $('#pinIn').focus(), 50);
+  }
+});
+async function tryPin(){
+  if(await sha256($('#pinIn').value.trim()) === CONFIG.SCHED_PIN_HASH){
+    setSched(true); $('#pinOvl').classList.remove('open'); toast('Scheduler mode on – Load Excel and Google Sheet are available');
+  } else { $('#pinErr').textContent = 'Incorrect PIN'; $('#pinIn').select(); }
+}
+$('#pinGo').addEventListener('click', tryPin);
+$('#pinIn').addEventListener('keydown', e => { if(e.key === 'Enter') tryPin(); });
+$('#pinCancel').addEventListener('click', () => $('#pinOvl').classList.remove('open'));
+$('#btnLock').addEventListener('click', () => {
+  setSched(false);
+  // back to the official dashboard sheet if a different source was loaded
+  if(!S.live || S.live.input !== CONFIG.SHEET){ S.live = null; loadGoogle(CONFIG.SHEET); }
+  toast('Scheduler mode off');
+});
+try { if(sessionStorage.getItem(CONFIG.KEY + '.sched') === '1') document.body.classList.add('sched'); } catch(e) {}
+
+async function readFile(f){
+  if(!window.XLSX){ toast('The Excel reader could not load – check your internet connection'); return; }
+  try {
+    let wb;
+    if(/\.csv$/i.test(f.name)) wb = XLSX.read(await f.text(), {type:'string', raw:true});
+    else wb = XLSX.read(await f.arrayBuffer(), {type:'array'});
+    S.live = null; loadWorkbook(wb, f.name);
+  } catch(err){ console.error(err); toast('Could not read that file: ' + err.message, 4000); }
+}
+
+/* ================= column mapping dialog ================= */
+function openMapping(){
+  const P = S.pending; if(!P) return;
+  const headers = (P.aoa[P.row] || []).map(h => String(h ?? '').trim());
+  const opts = sel => `<option value="-1">— not in file —</option>` + headers.map((h, i) => h ? `<option value="${i}" ${i === sel ? 'selected' : ''}>${esc(h)}</option>` : '').join('');
+  let html = '';
+  if(S.wb && S.wb.SheetNames.length > 1) html += `<p>Sheet: <select id="mSheet">${S.wb.SheetNames.map(s => `<option ${s === P.sn ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select></p>`;
+  html += `<p style="margin-top:0">Date order: <select id="mDate"><option value="auto">Detect automatically</option><option value="dmy" ${P.map.dateOrder==='dmy'?'selected':''}>Day first (16/11/26)</option><option value="mdy" ${P.map.dateOrder==='mdy'?'selected':''}>Month first (11/16/26)</option></select></p>`;
+  html += `<p style="margin-top:0">Header row: <input id="mRow" type="number" min="1" style="width:70px" value="${P.row + 1}"> &nbsp;<span style="color:var(--muted)">Fields marked <span class="req">*</span> are needed.</span></p><div class="mapgrid">`;
+  FIELDS.forEach(([f, label, req]) => { html += `<label>${label}${req ? ' <span class="req">*</span>' : ''}</label><select data-f="${f}">${opts(P.map[f])}</select>`; });
+  html += `</div>`;
+  $('#mapBody').innerHTML = html;
+  $('#mapOvl').classList.add('open');
+  const sh = $('#mSheet'); if(sh) sh.onchange = () => { const aoa = sheetAOA(S.wb, sh.value); const h = findHeader(aoa); P.sn = sh.value; P.aoa = aoa; P.row = h ? h.row : 0; P.map = autoMap((aoa[P.row] || []).map(String)); openMapping(); };
+  $('#mRow').onchange = e => { P.row = Math.max(0, (+e.target.value || 1) - 1); P.map = autoMap((P.aoa[P.row] || []).map(String)); openMapping(); };
+}
+$('#mapCancel').addEventListener('click', () => $('#mapOvl').classList.remove('open'));
+$('#mapApply').addEventListener('click', () => {
+  const P = S.pending;
+  document.querySelectorAll('#mapBody select[data-f]').forEach(s => P.map[s.dataset.f] = +s.value);
+  P.map.dateOrder = $('#mDate').value;
+  if(P.map.name < 0 || (P.map.start < 0 && P.map.finish < 0)){ toast('Task name and at least Start or Finish are needed'); return; }
+  $('#mapOvl').classList.remove('open');
+  applyData(P.opts && P.opts.keepView ? {keepView:true} : {});
+});
+document.querySelectorAll('.ovl').forEach(o => o.addEventListener('click', e => { if(e.target === o) o.classList.remove('open'); }));
+
+/* ================= sample data ================= */
+function loadSample(){
+  const s0 = new Date(); s0.setMinutes(0, 0, 0); s0.setHours(s0.getHours() - 28);
+  const H = h => new Date(s0.getTime() + h * HOUR);
+  // [key, level, name, offsetHrs, durHrs, pct, critical, preds, resource, workOrder, op, workCentre, floc, baselineShiftHrs, notes]
+  const L = [
+    ['p',1,'Mill 1 Major Shutdown – Sample'],
+    ['a',2,'Pre-Shutdown & Isolation'],
+    ['t1',3,'Mill crash stop – handover to Maintenance',0,0,100,1,'','Operations','','','OPS','PL01-ML01',0,'Confirm mill ground out and feed isolated before handover.'],
+    ['t2',3,'Electrical isolations – SAG mill & conveyors',0,2,100,1,'t1','Electrical Crew','4001234','0010','ELEC','PL01-ML01-EL',0,''],
+    ['t3',3,'Mechanical isolations & lock-out verification',2,2,100,1,'t2','Mech Crew A','4001235','0010','MECH','PL01-ML01',0,''],
+    ['t4',3,'Confined space & hot work permits issued',2,1,100,0,'t2','Permit Officer','','','SAFE','',0,''],
+    ['b',2,'SAG Mill'],
+    ['b1',3,'Mill Reline'],
+    ['t5',4,'Remove feed chute',4,6,100,1,'t3','Mech Crew A','4001301','0010','MECH','PL01-ML01-FC01',0,''],
+    ['t6',4,'Remove worn shell & head liners',10,18,100,1,'t5','Reline Crew','4001302','0020','RELINE','PL01-ML01-LN01',-2,'Liner handler hydraulic leak cost 2 hrs on night shift.'],
+    ['t7',4,'Install new shell & head liners',28,24,5,1,'t6','Reline Crew','4001302','0030','RELINE','PL01-ML01-LN01',-2,''],
+    ['t8',4,'Refit feed chute & torque check',52,6,0,1,'t7','Mech Crew A','4001301','0020','MECH','PL01-ML01-FC01',-2,''],
+    ['b2',3,'Drive Train'],
+    ['t9',4,'Inspect pinion & girth gear',4,8,100,0,'t3','Mech Crew B','4001410','0010','MECH','PL01-ML01-DR01',0,''],
+    ['t10',4,'Gearbox oil change & filter',12,4,100,0,'t9','Lube Tech','4001411','0010','LUBE','PL01-ML01-GB01',0,''],
+    ['c',2,'Conveyors'],
+    ['c1',3,'CV01 Mill Feed Conveyor'],
+    ['t11',4,'CV01 belt splice',4,14,100,0,'t3','Belt Crew','4001520','0010','BELT','PL01-CV01',0,''],
+    ['t12',4,'CV01 idler replacement (x24)',18,10,60,0,'t11','Belt Crew','4001521','0010','BELT','PL01-CV01',0,'Short 6 idlers – expediting from store.'],
+    ['c2',3,'CV02 Discharge Conveyor'],
+    ['t13',4,'CV02 head pulley re-lagging',4,20,80,0,'t3','Mech Crew B','4001530','0010','MECH','PL01-CV02-PU01',0,''],
+    ['d',2,'Pumps & Piping'],
+    ['t14',3,'Cyclone feed pump rebuild',4,16,100,0,'t3','Fitters','4001610','0010','MECH','PL01-PP03',0,''],
+    ['t15',3,'Slurry line spool replacement',20,12,30,0,'t14','Fitters','4001611','0010','MECH','PL01-PP03-PI01',0,''],
+    ['e',2,'Electrical & Instrumentation'],
+    ['t16',3,'MCC protection relay testing',6,8,100,0,'t2','Electrical Crew','4001710','0010','ELEC','PL01-MCC01',0,''],
+    ['t17',3,'Mill motor megger & IR test',14,4,0,0,'t16','Electrical Crew','4001711','0010','ELEC','PL01-ML01-MT01',0,'Waiting on test equipment from Perth.'],
+    ['f',2,'Return to Service'],
+    ['t18',3,'Remove isolations',58,3,0,1,'t8,t12,t13,t15,t17','Electrical Crew','4001234','0020','ELEC','PL01-ML01',-2,''],
+    ['t19',3,'Commissioning & mill ride-on',61,6,0,1,'t18','Commissioning','4001900','0010','OPS','PL01-ML01',-2,''],
+    ['t20',3,'Handback to Operations',67,0,0,1,'t19','Operations','','','OPS','PL01-ML01',-2,'']
+  ];
+  const head = ['ID','Unique ID','WBS','Outline Level','Name','Duration','Start','Finish','% Complete','Summary','Milestone','Critical','Predecessors','Resource Names','Baseline Start','Baseline Finish','Work Order','Operation','Work Centre','Functional Location','Notes'];
+  const keyId = {}; L.forEach((r, i) => keyId[r[0]] = i + 1);
+  const cnt = []; const rows = L.map((r, i) => {
+    const lvl = r[1]; cnt.length = lvl; cnt[lvl - 1] = (cnt[lvl - 1] || 0) + 1;
+    const wbs = cnt.slice(0, lvl).map(n => n || 1).join('.');
+    return {r, lvl, wbs, id:i + 1};
+  });
+  // summary dates from following deeper rows
+  const out = rows.map((o, i) => {
+    const r = o.r;
+    if(r.length > 3){
+      const st = H(r[3]), fi = H(r[3] + r[4]);
+      return [o.id, 100 + o.id, o.wbs, o.lvl, r[2], r[4] + ' hrs', st, fi, r[5], 'No', r[4] === 0 ? 'Yes' : 'No', r[6] ? 'Yes' : 'No',
+        r[7] ? r[7].split(',').map(k => keyId[k]).join(',') : '', r[8], H(r[3] + r[13]), H(r[3] + r[4] + r[13]), r[9], r[10], r[11], r[12], r[14]];
+    }
+    let mn = Infinity, mx = -Infinity, bmx = -Infinity, w = 0, s = 0;
+    for(let j = i + 1; j < rows.length && rows[j].lvl > o.lvl; j++){
+      const q = rows[j].r; if(q.length <= 3) continue;
+      mn = Math.min(mn, q[3]); mx = Math.max(mx, q[3] + q[4]); bmx = Math.max(bmx, q[3] + q[4] + q[13]);
+      w += Math.max(.5, q[4]); s += Math.max(.5, q[4]) * q[5];
+    }
+    return [o.id, 100 + o.id, o.wbs, o.lvl, r[2], (mx - mn) + ' hrs', H(mn), H(mx), Math.round(s / w), 'Yes', 'No', 'No', '', '', H(mn), H(bmx), '', '', '', '', ''];
+  });
+  S.wb = null; S.live = null;
+  S.pending = {name:'Sample shutdown (demo data)', sn:'', aoa:[head, ...out], row:0, map:autoMap(head)};
+  applyData();
+}
+
+/* ================= Google Sheet source ================= */
+function parseSheetLink(input){
+  const s = String(input || '').trim();
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/) || (/^[a-zA-Z0-9_-]{25,}$/.test(s) ? [s, s] : null);
+  if(!m) return null;
+  const g = s.match(/[#&?]gid=(\d+)/);
+  return {id:m[1], gid:g ? g[1] : null,
+    url:`https://docs.google.com/spreadsheets/d/${m[1]}/export?format=csv${g ? '&gid=' + g[1] : ''}`};
+}
+async function loadGoogle(input, opts={}){
+  const s = parseSheetLink(input);
+  if(!s){ if(!opts.quiet) toast("That doesn't look like a Google Sheet link"); return false; }
+  if(!window.XLSX){ if(!opts.quiet) toast('The spreadsheet reader could not load – check your internet connection'); return false; }
+  const btn = $('#btnRefresh'); btn.disabled = true;
+  try {
+    const r = await fetch(s.url + '&_=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const txt = await r.text();
+    if(/^\s*(<!doctype|<html)/i.test(txt)) throw new Error('the sheet is not shared as "Anyone with the link"');
+    const wb = XLSX.read(txt, {type:'string', raw:true});
+    const auto = S.live ? S.live.auto : (opts.auto != null ? opts.auto : CONFIG.AUTO_REFRESH_MIN);
+    S.live = {input, id:s.id, auto: opts.auto != null ? opts.auto : auto, at:Date.now()};
+    loadWorkbook(wb, 'Google Sheet', {keepView: !!opts.keepView});
+    await applyMetaStatusDate(s.id);
+    if(opts.keepView && !opts.quiet) toast('Refreshed from Google Sheet');
+    return true;
+  } catch(e){
+    if(!opts.quiet) toast('Could not read the Google Sheet: ' + e.message, 5000);
+    return false;
+  } finally { btn.disabled = false; }
+}
+// Status date = the one the scheduler sets on the Dashboard 1 header (stored by the dashboard script).
+// Only used once it has been set there, and unless the viewer has picked their own date in the Status date box.
+async function applyMetaStatusDate(id){
+  if(!CONFIG.STATUS_URL) return;
+  try {
+    const r = await fetch(CONFIG.STATUS_URL + '?action=meta&t=' + Date.now(), {cache:'no-store'});
+    if(!r.ok) return;
+    const m = await r.json();
+    if(!m || !m.statusDateSet || !m.statusDate) return;
+    const d = parseDate(m.statusDate, true);       // dd/MM/yy HH:mm
+    if(!d) return;
+    S.dataSD = d;
+    if(!S.sdManual){ S.statusDate = d; setStatusInput(); updateKPI(); refresh(); }
+    S.sdFromUpload = true;
+  } catch(e) { /* script not reachable – keep the current time */ }
+}
+function updateSourceLabels(){
+  const t = d => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  const live = S.live ? ` · updated ${t(new Date(S.live.at))}${S.live.auto ? ` · auto-refresh ${S.live.auto} min` : ''}` : '';
+  $('#projSub').textContent = `${S.source}${S.sheet && !S.live ? ' · sheet "' + S.sheet + '"' : ''}${live}`;
+  $('#footSrc').textContent = `Source: ${S.source}${S.live ? ' (live)' : ''} · loaded ${fmtLong(new Date())}`;
+  $('#btnRefresh').style.display = S.live ? '' : 'none';
+  const notes = [];
+  if(!S.hasOutline) notes.push('No Outline Level/WBS column in this data – rows are grouped by columns. Add "Outline Level" to the export to see the Project WBS.');
+  if(S.skipped) notes.push(`${S.skipped} rows with no task name were left out.`);
+  $('#notice').textContent = notes.join(' ');
+  const ex = document.querySelector('#filter option[value="exec"]'); if(ex) ex.hidden = !S.hasExec;
+}
+function buildGroupSelects(){
+  // columns listed A–Z (ignoring case, symbols and underscores) so they are easy to find
+  const key = h => h.replace(/[^a-z0-9]+/gi, ' ').trim().toLowerCase();
+  const hs = S.headers.map((h, i) => [h, i]).filter(([h]) => h)
+    .sort((x, y) => key(x[0]).localeCompare(key(y[0]), undefined, {numeric:true}));
+  const g1 = $('#g1'), g2 = $('#g2');
+  g1.innerHTML = (S.hasOutline ? `<option value="outline">Project WBS (outline)</option>` : '')
+    + `<option value="-1">No grouping</option>`
+    + hs.map(([h, i]) => `<option value="${i}">By ${esc(h)}</option>`).join('');
+  g1.value = String(S.group.g1);
+  g2.innerHTML = `<option value="-1">— then by —</option>` + hs.map(([h, i]) => `<option value="${i}">then ${esc(h)}</option>`).join('');
+  g2.value = String(S.group.g2 ?? -1);
+  g2.style.display = (S.group.g1 === 'outline' || S.group.g1 === -1) ? 'none' : '';
+}
+function regroup(){
+  const v = $('#g1').value;
+  S.group = {g1: v === 'outline' ? 'outline' : +v, g2: +$('#g2').value};
+  if(S.group.g2 === S.group.g1 || S.group.g1 === 'outline' || S.group.g1 === -1) S.group.g2 = -1;
+  rebuildTree(); defaultExpand(); S.selI = -1; closeCard(true);
+  buildGroupSelects(); buildLevelButtons(); layout(); refresh(); scroller.scrollTop = 0;
+}
+$('#g1').addEventListener('change', regroup);
+$('#sortBy').addEventListener('change', e => {
+  S.sort = e.target.value;
+  const prev = snapshotView();
+  rebuildTree(); restoreView(prev); closeCard(true);
+  buildLevelButtons(); layout(); refresh();
+});
+$('#g2').addEventListener('change', regroup);
+$('#btnRefresh').addEventListener('click', () => { if(S.live) loadGoogle(S.live.input, {keepView:true}); });
+$('#btnSheet').addEventListener('click', () => {
+  $('#sheetUrl').value = S.live ? S.live.input : (lsGet(CONFIG.KEY + '.sheet') || CONFIG.SHEET || '');
+  $('#sheetAuto').value = String(S.live ? S.live.auto : CONFIG.AUTO_REFRESH_MIN);
+  $('#sheetOvl').classList.add('open'); setTimeout(() => $('#sheetUrl').focus(), 50);
+});
+$('#sheetCancel').addEventListener('click', () => $('#sheetOvl').classList.remove('open'));
+$('#sheetForget').addEventListener('click', () => { try { localStorage.removeItem(CONFIG.KEY + '.sheet'); } catch(e) {} toast('Saved link removed from this browser'); });
+$('#sheetGo').addEventListener('click', async () => {
+  const url = $('#sheetUrl').value.trim(), auto = +$('#sheetAuto').value;
+  S.live = null;
+  if(await loadGoogle(url, {auto})){ lsSet(CONFIG.KEY + '.sheet', url); $('#sheetOvl').classList.remove('open'); }
+});
+setInterval(() => {
+  if(S.live && S.live.auto > 0 && Date.now() - S.live.at >= S.live.auto * 60000 && !document.hidden && !document.querySelector('.ovl.open'))
+    loadGoogle(S.live.input, {keepView:true, quiet:true});
+}, 30000);
+
+/* ================= team / resource filters ================= */
+function buildPeopleFilters(){
+  const leaves = S.base.filter(t => !t.oSummary);
+  const teams = [...new Set(leaves.map(t => t.team).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const res = [...new Set(leaves.flatMap(t => t.resList || []))].sort((a, b) => a.localeCompare(b));
+  if(!teams.includes(S.fTeam)) S.fTeam = '';
+  if(!res.includes(S.fRes)) S.fRes = '';
+  const ft = $('#fTeam'), fr = $('#fRes');
+  ft.innerHTML = `<option value="">All teams</option>` + teams.map(v => `<option>${esc(v)}</option>`).join('');
+  fr.innerHTML = `<option value="">All resources</option>` + res.map(v => `<option>${esc(v)}</option>`).join('');
+  ft.value = S.fTeam; fr.value = S.fRes;
+  ft.style.display = teams.length ? '' : 'none';
+  fr.style.display = res.length ? '' : 'none';
+}
+$('#fTeam').addEventListener('change', e => { S.fTeam = e.target.value; applyFilter(); scroller.scrollTop = 0; });
+$('#fRes').addEventListener('change', e => { S.fRes = e.target.value; applyFilter(); scroller.scrollTop = 0; });
+
+/* ================= boot ================= */
+async function boot(){
+  setStatusInput(); buildZoomButtons();
+  let qs = {};
+  try { qs = Object.fromEntries(new URLSearchParams(location.search)); } catch(e) {}
+  // Everyone sees the dashboard sheet; saved links / ?sheet= / ?file= only apply in scheduler mode
+  if(!isSched()) qs = {};
+  const sheet = isSched() ? (qs.sheet || lsGet(CONFIG.KEY + '.sheet') || (qs.file ? '' : CONFIG.SHEET)) : CONFIG.SHEET;
+  if(sheet){
+    if(await loadGoogle(sheet, {quiet:true})) return;
+    toast("Couldn't reach the Google Sheet from here – showing sample data. (Previews inside Claude block outside data; it works once hosted, e.g. on GitHub Pages. You can also use File › Download › .xlsx in Sheets and drop the file here.)", 9000);
+  }
+  const src = qs.file || CONFIG.FILE;
+  if(src){
+    try {
+      const r = await fetch(src, {cache:'no-store'});
+      if(r.ok && window.XLSX){
+        const buf = await r.arrayBuffer(); const b = new Uint8Array(buf.slice(0, 4));
+        const isZip = b[0] === 0x50 && b[1] === 0x4B, isOle = b[0] === 0xD0 && b[1] === 0xCF;
+        if(isZip || isOle){ loadWorkbook(XLSX.read(buf, {type:'array'}), src.split('/').pop()); return; }
+      }
+    } catch(e) {}
+  }
+  loadSample();
+}
+boot();
+</script>
+</body>
+</html>
