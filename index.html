@@ -35,7 +35,13 @@
 
     main { flex: 1; padding: 32px 20px 40px; max-width: 480px; margin: 0 auto; width: 100%; }
     .section-label { font-size: 11px; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; padding-left: 4px; }
-    .app-grid { display: flex; flex-direction: column; gap: 14px; }
+    .app-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .app-grid .load-msg { grid-column: 1 / -1; }
+    /* PC / wide screens: two columns */
+    @media (min-width: 900px) {
+      main { max-width: 960px; }
+      .app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    }
     .app-card { display: flex; align-items: center; gap: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px 22px; text-decoration: none; color: var(--text); cursor: pointer; transition: background 0.18s, border-color 0.18s, transform 0.15s; -webkit-tap-highlight-color: transparent; position: relative; overflow: hidden; }
     .app-card::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%); border-radius: inherit; }
     .app-card:active { transform: scale(0.97); background: var(--card-hover); }
