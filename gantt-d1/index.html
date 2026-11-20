@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Talison Schedule Viewer – Gantt (Dashboard 1)</title>
+<title>PalmCrest Schedule Viewer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -153,9 +153,6 @@ table.all td:first-child{color:var(--muted);width:42%}
 /* modal / misc */
 .ovl{position:fixed;inset:0;background:rgba(15,42,68,.45);z-index:80;display:none;align-items:center;justify-content:center;padding:16px}
 .ovl.open{display:flex}
-body:not(.sched) .sched-only{display:none!important}
-.brand{cursor:default;user-select:none;-webkit-tap-highlight-color:transparent}
-#btnLock{border-color:var(--late);color:var(--late)}
 .dlg{background:#fff;border-radius:10px;max-width:640px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .dlg h3{margin:0;padding:14px 18px;border-bottom:1px solid var(--line);font-size:15px}
 .dlg .db{padding:14px 18px;overflow:auto}
@@ -179,13 +176,12 @@ body:not(.sched) .sched-only{display:none!important}
 <body>
 
 <div class="top">
-  <div class="brand">PalmCrest<small>Talison Schedule Viewer</small></div>
+  <div class="brand">PalmCrest<small>Schedule Viewer</small></div>
   <div class="proj" id="projName">Loading…<small id="projSub"></small></div>
   <div class="kpi" id="kpi"></div>
   <button id="btnRefresh" title="Reload the Google Sheet now" style="display:none">⟳ Refresh</button>
-  <button id="btnSheet" class="sched-only" title="Load from a Google Sheet">Google Sheet…</button>
-  <button class="primary sched-only" id="btnLoad">Load Excel…</button>
-  <button id="btnLock" class="sched-only" title="Leave scheduler mode">🔒 Lock</button>
+  <button id="btnSheet" title="Load from a Google Sheet">Google Sheet…</button>
+  <button class="primary" id="btnLoad">Load Excel…</button>
   <input type="file" id="file" accept=".xlsx,.xlsm,.xls,.csv" hidden>
 </div>
 
@@ -194,11 +190,7 @@ body:not(.sched) .sched-only{display:none!important}
   <label>Filter</label>
   <select id="filter">
     <option value="all">All tasks</option>
-    <option value="open">Not completed</option>
-    <option value="critical">Critical (total slack ≤ 0)</option>
-    <option value="cpct">CP / CT rows</option>
-    <option value="cp">CP only</option>
-    <option value="ct">CT only</option>
+    <option value="critical">Critical path</option>
     <option value="late">Late</option>
     <option value="ip">In progress</option>
     <option value="ns">Not started</option>
@@ -215,16 +207,6 @@ body:not(.sched) .sched-only{display:none!important}
   <label>Group</label>
   <select id="g1" title="How rows are grouped into expandable levels"></select>
   <select id="g2" title="Second grouping level"></select>
-  <label>Sort</label>
-  <select id="sortBy" title="Sort tasks within each WBS level / group">
-    <option value="wbs">WBS order</option>
-    <option value="start">Start (earliest first)</option>
-    <option value="finish">Finish (earliest first)</option>
-    <option value="team">Team (A–Z)</option>
-    <option value="pct">% complete (lowest first)</option>
-    <option value="slack">Total slack (least first)</option>
-    <option value="name">Task name (A–Z)</option>
-  </select>
   <label>Show levels</label>
   <div class="seg" id="levels"></div>
   <label>Zoom</label>
@@ -272,7 +254,7 @@ body:not(.sched) .sched-only{display:none!important}
     </ul>
     <p>Dates can be Excel dates or text like <code>Mon 16/11/26 7:00 AM</code>. Rows must stay in Project's order (top to bottom), which is how Project exports them.</p>
     <p><b>Hosting:</b> put this page and your export named <code>schedule.xlsx</code> in the same folder (e.g. GitHub Pages) and it loads automatically. <code>?file=other.xlsx</code> picks a different file.</p>
-    <p style="margin-bottom:0" class="sched-only"><button id="btnMapOpen">Change column matching…</button> <button id="btnSample">Load sample shutdown</button></p>
+    <p style="margin-bottom:0"><button id="btnMapOpen">Change column matching…</button> <button id="btnSample">Load sample shutdown</button></p>
   </div>
   <div class="df"><button class="primary" id="helpClose">Close</button></div>
 </div></div>
@@ -288,14 +270,6 @@ body:not(.sched) .sched-only{display:none!important}
   <div class="df"><button id="sheetForget">Forget saved link</button><span style="flex:1"></span><button id="sheetCancel">Cancel</button><button class="primary" id="sheetGo">Load sheet</button></div>
 </div></div>
 
-<div class="ovl" id="pinOvl"><div class="dlg" style="max-width:340px">
-  <h3>Scheduler access</h3>
-  <div class="db"><p style="margin-top:0">Enter the scheduler PIN to load a different file or sheet.</p>
-    <input id="pinIn" type="password" inputmode="numeric" autocomplete="off" style="width:100%">
-    <p id="pinErr" style="color:var(--crit);margin-bottom:0;min-height:1em"></p></div>
-  <div class="df"><button id="pinCancel">Cancel</button><button class="primary" id="pinGo">Unlock</button></div>
-</div></div>
-
 <div id="drop">Drop your Project Excel export to load it</div>
 <div id="tip"></div>
 <div id="toast"></div>
@@ -306,17 +280,9 @@ body:not(.sched) .sched-only{display:none!important}
 const CONFIG = {
   // Google Sheet to load (must be shared "Anyone with the link can view"). Leave '' to skip.
   // Add #gid=NNN (from the sheet's URL) to pick a tab other than the first one.
-  SHEET: 'https://docs.google.com/spreadsheets/d/1ZhOwgVk_tlWLFR0s_PoAREyB-eGHCpF9D7001lp9B_o/edit',   // Talison Dashboard 1 sheet – first tab (Tasks)
+  SHEET: 'https://docs.google.com/spreadsheets/d/10z4h9f3pL3HFhhwfaXpKgWXywHuqq40OguHe_oVxJRk/edit?usp=sharing',
   AUTO_REFRESH_MIN: 5,          // minutes between automatic reloads of the Google Sheet (0 = off)
-  FILE: '',                     // uses the Google Sheet above (no local Excel file)
-  // Dashboard 1 script – the Gantt uses the same status date the scheduler sets on the dashboard
-  STATUS_URL: 'https://script.google.com/macros/s/AKfycbwp4KdsvPWv2pON1iIOTjaJhYeLJpLZWBfShz2nBZRPCsCIeVH40o-GAURk9gPg7d-BZw/exec',
-  // The Talison sheet shows dates month-first (11/23/26 18:00); forced so early-month dates aren't misread
-  DATE_ORDER: 'mdy',
-  KEY: 'talgantt1',             // browser storage prefix (keeps each Gantt's saved settings separate)
-  // Scheduler PIN (SHA-256 hash). Tap the "PalmCrest" logo 5 times to unlock Load Excel / Google Sheet.
-  // Default PIN 2468 – to change, hash a new PIN (e.g. the Hub admin "Change access code" tool) and paste here.
-  SCHED_PIN_HASH: 'a1fb4e703a9ef1fa4936801721ff285a97ac85330856674412e054892afe6972'
+  FILE: 'schedule.xlsx'         // Excel file next to this page, used when no Google Sheet is set
 };
 /* ================= constants ================= */
 const RH = 26, HDR = 48;
@@ -330,7 +296,7 @@ const ZOOMS = {
 };
 const COLS = [
   {k:'wbs',   t:'WBS',       w:70},
-  {k:'name',  t:'Task name', w:500, wn:190},
+  {k:'name',  t:'Task name', w:250, wn:190},
   {k:'team',  t:'Team',      w:100, narrowHide:true},
   {k:'res',   t:'Resource',  w:120, narrowHide:true},
   {k:'start', t:'Start',     w:114, narrowHide:true},
@@ -343,8 +309,7 @@ const FIELDS = [
   ['duration','Duration'],['pct','% Complete'],['summary','Summary (Yes/No)'],['milestone','Milestone (Yes/No)'],
   ['critical','Critical (Yes/No)'],['preds','Predecessors'],['team','Team'],['res','Resource names'],['notes','Notes'],
   ['bstart','Baseline start'],['bfinish','Baseline finish'],['astart','Actual start'],['afinish','Actual finish'],
-  ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)'],
-  ['slack','Total slack (hrs)'],['cpct','CP/CT flag (1=CP, 2=CT)'],['active','Active (Yes/No)']
+  ['deadline','Deadline'],['sdate','Status date'],['link','Hyperlink'],['exec','Executive summary (Yes/No)']
 ];
 const ALIASES = {
   name:['name','taskname','task','activityname','activity','description','tasks'],
@@ -358,14 +323,13 @@ const ALIASES = {
   summary:['summary','issummary'],
   milestone:['milestone','ismilestone'],
   critical:['critical','iscritical'],
-  preds:['predecessors','predecessor','preds','pred'],
-  team:['resourcegroup','team','crew','contractor','discipline','company'],
+  preds:['predecessors','predecessor','preds'],
+  team:['team','crew','contractor','discipline','company'],
   res:['resourcenames','resources','resource','resourcename'],
-  notes:['notes','note','comments','supervisornotes'],
+  notes:['notes','note','comments'],
   bstart:['baselinestart','plannedstart','baseline0start'], bfinish:['baselinefinish','plannedfinish','baseline0finish'], astart:['actualstart'], afinish:['actualfinish'],
   deadline:['deadline'], sdate:['statusdate','datadate'], link:['hyperlink','hyperlinkaddress','link'],
-  exec:['executivesummary','executivcesummary','execsummary','exec'],
-  slack:['totalslack','slack','totalfloat','float'], cpct:['cpct','cpctflag','cpflag'], active:['active']
+  exec:['executivesummary','executivcesummary','execsummary','exec']
 };
 const DATE_FIELDS = ['start','finish','bstart','bfinish','astart','afinish','deadline','sdate'];
 const ST_LABEL = {done:'Complete', late:'Late', ip:'In progress', ns:'Not started'};
@@ -377,7 +341,7 @@ const WD = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const S = {
   tasks:[], byId:new Map(), headers:[], dateCols:new Set(), source:'', sheet:'', project:'',
   zoom:'day', expanded:new Set(), filter:'all', q:'', statusDate:new Date(),
-  fTeam:'', fRes:'', base:[], skipped:0, sdManual:false, dataSD:null, group:{g1:'outline', g2:-1}, sort:'wbs', hasOutline:true, live:null, dmy:true,
+  fTeam:'', fRes:'', base:[], skipped:0, sdManual:false, dataSD:null, group:{g1:'outline', g2:-1}, hasOutline:true, live:null, dmy:true,
   visible:[], selI:-1, minLevel:1, maxLevel:1, hasTimes:true,
   t0:0, t1:0, px:0, gridW:0, canvasW:0, cols:COLS, pending:null, wb:null
 };
@@ -456,10 +420,7 @@ function parseBool(v){
 function rawPct(v){
   if(v == null || v === '') return null;
   if(typeof v === 'number') return {n:v, s:false};
-  const s = String(v).trim();
-  // plain or scientific number, e.g. 0.26 or 8.9999999999999997E-2 (Sheets CSV writes tiny values this way)
-  if(/^[-+]?(\d+\.?\d*|\.\d+)(e[-+]?\d+)?$/i.test(s)) return {n:+s, s:false};
-  const n = parseFloat(s.replace(/[^\d.\-]/g, ''));
+  const s = String(v).trim(); const n = parseFloat(s.replace(/[^\d.\-]/g, ''));
   return isNaN(n) ? null : {n, s:/%/.test(s)};
 }
 
@@ -482,7 +443,7 @@ function autoMap(headers){
   }
   return map;
 }
-const mapKey = headers => CONFIG.KEY + '.map.' + headers.map(norm).join('|').slice(0, 400);
+const mapKey = headers => 'pcgantt.map.' + headers.map(norm).join('|').slice(0, 400);
 
 function sheetAOA(wb, sn){ return XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:''}); }
 
@@ -513,14 +474,12 @@ function applyData(opts={}){
   const {aoa, row:hRow, map} = P;
   const headers = (aoa[hRow] || []).map(h => String(h ?? '').trim());
   const get = (r, f) => (map[f] != null && map[f] >= 0) ? r[map[f]] : undefined;
-  const rows = aoa.slice(hRow + 1).map((r, i) => { if(r) r.__i = i; return r; }).filter(r => r && r.some(v => v !== '' && v != null));
+  const rows = aoa.slice(hRow + 1).filter(r => r && r.some(v => v !== '' && v != null));
 
   // date order: explicit choice, else vote on text dates (a first part > 12 means day-first, a second part > 12 means month-first)
   let dmy = true;
-  const forced = (S.live && S.live.input === CONFIG.SHEET) ? CONFIG.DATE_ORDER : '';
   if(map.dateOrder === 'dmy') dmy = true;
   else if(map.dateOrder === 'mdy') dmy = false;
-  else if(forced) dmy = forced !== 'mdy';
   else {
     let vd = 0, vm = 0;
     rows.forEach(r => DATE_FIELDS.forEach(f => {
@@ -537,31 +496,29 @@ function applyData(opts={}){
 
   const hasOutline = map.level >= 0 || map.wbs >= 0;
   const base = [];
-  let skipped = 0, inactive = 0, dataSD = null;
+  let skipped = 0, dataSD = null;
   rows.forEach(r => {
     if(!dataSD) dataSD = parseDate(get(r, 'sdate'), dmy);
     const name = String(get(r, 'name') ?? '').trim();
     // rows with no task name (blank or junk rows in the export) are left out
     if(!name){ skipped++; return; }
-    // inactive tasks (Active = No in Project) are left out
-    if(map.active >= 0 && /^(no|n|false|0)$/i.test(String(get(r, 'active') ?? '').trim())){ inactive++; return; }
     const start = parseDate(get(r, 'start'), dmy), finish = parseDate(get(r, 'finish'), dmy);
     const wbs = String(get(r, 'wbs') ?? '').trim();
     let level = parseInt(get(r, 'level'), 10);
-    if(isNaN(level)) level = wbs === '0' ? 0 : (wbs ? wbs.split('.').filter(Boolean).length : 1);
+    if(isNaN(level)) level = wbs ? wbs.split('.').filter(Boolean).length : 1;
     const p = rawPct(get(r, 'pct'));
     const durRaw = get(r, 'duration');
     const durStr = (durRaw != null && durRaw !== '') ? String(durRaw).trim() : '';
     base.push({
       raw: r, name: name || '(unnamed)', oLevel: level, wbs,
-      id: map.id >= 0 ? String(get(r, 'id') ?? '').trim() : String(r.__i),
+      id: String(get(r, 'id') ?? '').trim(),
       start: start || finish, finish: finish || start,
       pct: p ? Math.max(0, Math.min(100, scale100 ? p.n : p.n * 100)) : null,
       // a bare number (e.g. 117.5) has no unit, so show the elapsed time from the dates instead
       durText: /^[\d.,]+$/.test(durStr) ? '' : durStr,
       summaryCol: map.summary >= 0 ? parseBool(get(r, 'summary')) : null,
       milestoneCol: map.milestone >= 0 ? parseBool(get(r, 'milestone')) : null,
-      critical: map.critical >= 0 ? parseBool(get(r, 'critical')) : null,   // set below from Total Slack if no Critical column
+      critical: parseBool(get(r, 'critical')),
       predsRaw: String(get(r, 'preds') ?? '').trim(),
       res: String(get(r, 'res') ?? '').trim(),
       team: String(get(r, 'team') ?? '').trim(),
@@ -570,8 +527,6 @@ function applyData(opts={}){
       astart: parseDate(get(r, 'astart'), dmy), afinish: parseDate(get(r, 'afinish'), dmy),
       deadline: parseDate(get(r, 'deadline'), dmy), link: String(get(r, 'link') ?? '').trim(),
       exec: parseBool(get(r, 'exec')),
-      slack: (v => { const n = parseFloat(String(v ?? '').replace(/[^\d.\-eE]/g, '')); return isNaN(n) ? null : n; })(get(r, 'slack')),
-      cpct: parseInt(get(r, 'cpct'), 10) || 0,
       children: [], parent: -1
     });
   });
@@ -582,7 +537,6 @@ function applyData(opts={}){
     t.oSummary = t.summaryCol === true || (hasOutline && !!next && next.oLevel > t.oLevel);
     if(!t.id) t.id = String(i + 1);
     if(!t.oSummary && t.pct == null) t.pct = 0;
-    if(t.critical === null) t.critical = t.slack !== null && t.slack <= 0 && (t.pct == null || t.pct < 99.5);
     const zeroDur = /^0+(\.0+)?\s*[a-z]*\??$/i.test(t.durText);
     t.milestone = t.milestoneCol != null ? t.milestoneCol : (!t.oSummary && ((t.start && t.finish && +t.start === +t.finish) || zeroDur));
     if(!t.durText && t.start && t.finish) t.durText = fmtDurMs(t.finish - t.start);
@@ -605,7 +559,7 @@ function applyData(opts={}){
 
   // commit
   S.base = base; S.headers = headers; S.source = P.name; S.sheet = P.sn; S.hasOutline = hasOutline;
-  S.skipped = skipped; S.inactive = inactive; S.dataSD = dataSD; S.hasExec = map.exec >= 0;
+  S.skipped = skipped; S.dataSD = dataSD; S.hasExec = map.exec >= 0;
   // use the schedule's own status date unless the viewer has picked one
   if(dataSD && !S.sdManual){ S.statusDate = dataSD; setStatusInput(); }
   S.dateCols = new Set(DATE_FIELDS.map(f => map[f]).filter(i => i >= 0));
@@ -716,38 +670,8 @@ function rebuildTree(){
     const cnt = [];
     out.forEach(t => { cnt.length = t.level; cnt[t.level - 1] = (cnt[t.level - 1] || 0) + 1; if(t.synthetic) t.wbs = cnt.slice(0, t.level).map(n => n || 1).join('.'); });
   }
-  S.tasks = sortTree(out);
+  S.tasks = out;
   S.minLevel = Math.min(...out.map(t => t.level)); S.maxLevel = Math.max(...out.map(t => t.level));
-}
-// Sort siblings within each parent (the WBS structure is kept). Ties keep WBS order.
-function sortTree(out){
-  const k = S.sort || 'wbs';
-  if(k === 'wbs') return out;
-  const last = Number.POSITIVE_INFINITY;
-  const key = {
-    start:  t => t.start ? +t.start : last,
-    finish: t => t.finish ? +t.finish : last,
-    pct:    t => t.pct == null ? last : t.pct,
-    slack:  t => t.slack == null ? last : t.slack,
-  }[k];
-  const txt = k === 'team' ? (t => t.team || '') : k === 'name' ? (t => t.name || '') : null;
-  const cmp = (a, b) => {
-    if(txt){
-      const x = txt(a), y = txt(b);
-      if(!x !== !y) return x ? -1 : 1;                       // blanks last
-      const c = x.localeCompare(y, undefined, {numeric:true, sensitivity:'base'});
-      if(c) return c;
-      return (a.start ? +a.start : last) - (b.start ? +b.start : last) || a.i - b.i;
-    }
-    return (key(a) - key(b)) || a.i - b.i;
-  };
-  const res = [];
-  const walk = t => { const old = t.children; res.push(t); old.map(c => out[c]).sort(cmp).forEach(walk); };
-  out.filter(t => t.parent < 0).sort(cmp).forEach(walk);
-  const map = new Map(res.map((t, n) => [t.i, n]));
-  res.forEach(t => { t.children = t.children.map(c => map.get(c)); if(t.parent >= 0) t.parent = map.get(t.parent); });
-  res.forEach((t, n) => { t.i = n; });
-  return res;
 }
 function defaultExpand(){ if(S.tasks.length <= 120) expandAll(); else expandTo(S.minLevel + 1); }
 function snapshotView(){
@@ -782,18 +706,11 @@ function matches(t){
   const sd = +S.statusDate;
   switch(S.filter){
     case 'all': return true;
-    case 'open': return !t.summary && status(t) !== 'done';   // in progress + not started (incl. late)
-    case 'critical': return !t.summary && t.critical;
-    case 'cpct': return t.cpct === 1 || t.cpct === 2;
-    case 'cp': return t.cpct === 1;
-    case 'ct': return t.cpct === 2;
-    // by % complete only, whatever the dates (late tasks are included)
-    case 'ns': return !t.summary && (t.pct || 0) <= 0;
-    case 'ip': return !t.summary && t.pct > 0 && t.pct < 99.5;
+    case 'critical': return t.critical;
     case 'ms': return t.milestone;
     case 'exec': return !!t.exec;
     case 'wbs': return t.summary;
-    case 'late': case 'done': return !t.summary && status(t) === S.filter;
+    case 'late': case 'ip': case 'ns': case 'done': return !t.summary && status(t) === S.filter;
     case 'next12': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 12*HOUR;
     case 'next24': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 24*HOUR;
     case 'next7d': return !t.summary && t.start && +t.start >= sd && +t.start <= sd + 7*DAY;
@@ -1007,7 +924,7 @@ function openCard(i){
     <div class="crumb">${crumbs.map(esc).join(' › ') || '&nbsp;'}</div>
     <div class="tag">${t.wbs ? 'WBS ' + esc(t.wbs) + ' · ' : ''}ID ${esc(t.id)}</div>
     <h2>${esc(t.name)}</h2>
-    <div class="pills"><span class="pill ${st}">${ST_LABEL[st]}</span>${t.critical ? '<span class="pill crit">Critical</span>' : ''}${t.cpct === 1 ? '<span class="pill crit">CP</span>' : t.cpct === 2 ? '<span class="pill late">CT</span>' : ''}${t.milestone ? '<span class="pill">Milestone</span>' : ''}${t.summary ? '<span class="pill">Summary</span>' : ''}${t.exec ? '<span class="pill">Exec summary</span>' : ''}</div>
+    <div class="pills"><span class="pill ${st}">${ST_LABEL[st]}</span>${t.critical ? '<span class="pill crit">Critical</span>' : ''}${t.milestone ? '<span class="pill">Milestone</span>' : ''}${t.summary ? '<span class="pill">Summary</span>' : ''}${t.exec ? '<span class="pill">Exec summary</span>' : ''}</div>
     <button class="x" id="cardX" title="Close (Esc)">×</button></div><div class="cb">`;
   html += `<div class="big"><b>${pct}%</b><div class="pbar"><i style="width:${pct}%;background:${st === 'done' ? 'var(--done)' : st === 'late' ? 'var(--late)' : 'var(--task)'}"></i></div></div>`;
   html += `<div class="kv">
@@ -1034,8 +951,6 @@ function openCard(i){
   }
   html += `</div>`;
 
-  // Project notes – shown near the top of the card so they're seen first
-  if(t.notes) html += `<div class="sec">Notes from Project</div><div class="notes">${esc(t.notes)}</div>`;
   if(t.synthetic) html += `<div class="kv"><div class="full"><span>Grouped by</span><b>${esc(t.groupCol)}: ${esc(t.groupVal || '(blank)')}</b></div></div>`;
   if(t.summary){
     const leaves = []; (function walk(j){ S.tasks[j].children.forEach(c => S.tasks[c].summary ? walk(c) : leaves.push(S.tasks[c])); })(i);
@@ -1048,6 +963,7 @@ function openCard(i){
   const pr = t.preds.filter(p => p.t.inTree), su = t.succs.filter(p => p.t.inTree);
   if(pr.length) html += `<div class="sec">Predecessors</div><div class="links">${pr.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
   if(su.length) html += `<div class="sec">Successors</div><div class="links">${su.map(p => linkHTML(p.t.i, p.type !== 'FS' || p.lag ? ` <em>${p.type}${esc(p.lag)}</em>` : '')).join('')}</div>`;
+  if(t.notes) html += `<div class="sec">Notes</div><div class="notes">${esc(t.notes)}</div>`;
   const rows = S.headers.map((h, ci) => [h, fmtRaw(t.raw[ci], ci)]).filter(([h, v]) => h && v !== '');
   if(rows.length) html += `<div class="sec">All fields from the export</div><table class="all">${rows.map(([h, v]) => `<tr><td>${esc(h)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`;
   html += `</div><div class="cf"><button id="cPrev" title="Previous row (↑)">◀ Prev</button><button id="cNext" title="Next row (↓)">Next ▶</button><span class="sp"></span><button id="cCopy">Copy details</button><button id="cShow">Show in Gantt</button></div>`;
@@ -1164,44 +1080,10 @@ $('#rows').addEventListener('mouseleave', () => tip.style.display = 'none');
 
 /* drag & drop */
 let dragN = 0;
-addEventListener('dragenter', e => { e.preventDefault(); if(!isSched()) return; dragN++; $('#drop').classList.add('on'); });
+addEventListener('dragenter', e => { e.preventDefault(); dragN++; $('#drop').classList.add('on'); });
 addEventListener('dragleave', e => { dragN = Math.max(0, dragN - 1); if(!dragN) $('#drop').classList.remove('on'); });
 addEventListener('dragover', e => e.preventDefault());
-addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classList.remove('on'); if(!isSched()) return; const f = e.dataTransfer.files[0]; if(f) readFile(f); });
-
-/* scheduler mode – Load Excel / Google Sheet / drag-drop are hidden until unlocked */
-function isSched(){ return document.body.classList.contains('sched'); }
-function setSched(on){
-  document.body.classList.toggle('sched', on);
-  try { on ? sessionStorage.setItem(CONFIG.KEY + '.sched', '1') : sessionStorage.removeItem(CONFIG.KEY + '.sched'); } catch(e) {}
-}
-async function sha256(t){
-  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t));
-  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
-}
-let brandTaps = 0, brandTimer = null;
-$('.brand').addEventListener('click', () => {
-  brandTaps++; clearTimeout(brandTimer); brandTimer = setTimeout(() => brandTaps = 0, 2000);
-  if(brandTaps >= 5 && !isSched()){
-    brandTaps = 0; $('#pinIn').value = ''; $('#pinErr').textContent = '';
-    $('#pinOvl').classList.add('open'); setTimeout(() => $('#pinIn').focus(), 50);
-  }
-});
-async function tryPin(){
-  if(await sha256($('#pinIn').value.trim()) === CONFIG.SCHED_PIN_HASH){
-    setSched(true); $('#pinOvl').classList.remove('open'); toast('Scheduler mode on – Load Excel and Google Sheet are available');
-  } else { $('#pinErr').textContent = 'Incorrect PIN'; $('#pinIn').select(); }
-}
-$('#pinGo').addEventListener('click', tryPin);
-$('#pinIn').addEventListener('keydown', e => { if(e.key === 'Enter') tryPin(); });
-$('#pinCancel').addEventListener('click', () => $('#pinOvl').classList.remove('open'));
-$('#btnLock').addEventListener('click', () => {
-  setSched(false);
-  // back to the official dashboard sheet if a different source was loaded
-  if(!S.live || S.live.input !== CONFIG.SHEET){ S.live = null; loadGoogle(CONFIG.SHEET); }
-  toast('Scheduler mode off');
-});
-try { if(sessionStorage.getItem(CONFIG.KEY + '.sched') === '1') document.body.classList.add('sched'); } catch(e) {}
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('#drop').classList.remove('on'); const f = e.dataTransfer.files[0]; if(f) readFile(f); });
 
 async function readFile(f){
   if(!window.XLSX){ toast('The Excel reader could not load – check your internet connection'); return; }
@@ -1307,6 +1189,10 @@ function loadSample(){
 }
 
 /* ================= Google Sheet source ================= */
+// A link saved with the "Google Sheet…" button is kept per folder (gantt-d1/, gantt-d2/ …),
+// so several Gantt pages on the same site never pick up each other's sheet.
+let SHEET_KEY = 'pcgantt.sheet';
+try { SHEET_KEY += ':' + location.pathname.replace(/index\.html?$/i, ''); } catch(e) {}
 function parseSheetLink(input){
   const s = String(input || '').trim();
   const m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/) || (/^[a-zA-Z0-9_-]{25,}$/.test(s) ? [s, s] : null);
@@ -1329,29 +1215,12 @@ async function loadGoogle(input, opts={}){
     const auto = S.live ? S.live.auto : (opts.auto != null ? opts.auto : CONFIG.AUTO_REFRESH_MIN);
     S.live = {input, id:s.id, auto: opts.auto != null ? opts.auto : auto, at:Date.now()};
     loadWorkbook(wb, 'Google Sheet', {keepView: !!opts.keepView});
-    await applyMetaStatusDate(s.id);
     if(opts.keepView && !opts.quiet) toast('Refreshed from Google Sheet');
     return true;
   } catch(e){
     if(!opts.quiet) toast('Could not read the Google Sheet: ' + e.message, 5000);
     return false;
   } finally { btn.disabled = false; }
-}
-// Status date = the one the scheduler sets on the Dashboard 1 header (stored by the dashboard script).
-// Only used once it has been set there, and unless the viewer has picked their own date in the Status date box.
-async function applyMetaStatusDate(id){
-  if(!CONFIG.STATUS_URL) return;
-  try {
-    const r = await fetch(CONFIG.STATUS_URL + '?action=meta&t=' + Date.now(), {cache:'no-store'});
-    if(!r.ok) return;
-    const m = await r.json();
-    if(!m || !m.statusDateSet || !m.statusDate) return;
-    const d = parseDate(m.statusDate, true);       // dd/MM/yy HH:mm
-    if(!d) return;
-    S.dataSD = d;
-    if(!S.sdManual){ S.statusDate = d; setStatusInput(); updateKPI(); refresh(); }
-    S.sdFromUpload = true;
-  } catch(e) { /* script not reachable – keep the current time */ }
 }
 function updateSourceLabels(){
   const t = d => `${p2(d.getHours())}:${p2(d.getMinutes())}`;
@@ -1362,7 +1231,6 @@ function updateSourceLabels(){
   const notes = [];
   if(!S.hasOutline) notes.push('No Outline Level/WBS column in this data – rows are grouped by columns. Add "Outline Level" to the export to see the Project WBS.');
   if(S.skipped) notes.push(`${S.skipped} rows with no task name were left out.`);
-  if(S.inactive) notes.push(`${S.inactive} inactive tasks are hidden.`);
   $('#notice').textContent = notes.join(' ');
   const ex = document.querySelector('#filter option[value="exec"]'); if(ex) ex.hidden = !S.hasExec;
 }
@@ -1388,25 +1256,19 @@ function regroup(){
   buildGroupSelects(); buildLevelButtons(); layout(); refresh(); scroller.scrollTop = 0;
 }
 $('#g1').addEventListener('change', regroup);
-$('#sortBy').addEventListener('change', e => {
-  S.sort = e.target.value;
-  const prev = snapshotView();
-  rebuildTree(); restoreView(prev); closeCard(true);
-  buildLevelButtons(); layout(); refresh();
-});
 $('#g2').addEventListener('change', regroup);
 $('#btnRefresh').addEventListener('click', () => { if(S.live) loadGoogle(S.live.input, {keepView:true}); });
 $('#btnSheet').addEventListener('click', () => {
-  $('#sheetUrl').value = S.live ? S.live.input : (lsGet(CONFIG.KEY + '.sheet') || CONFIG.SHEET || '');
+  $('#sheetUrl').value = S.live ? S.live.input : (lsGet(SHEET_KEY) || CONFIG.SHEET || '');
   $('#sheetAuto').value = String(S.live ? S.live.auto : CONFIG.AUTO_REFRESH_MIN);
   $('#sheetOvl').classList.add('open'); setTimeout(() => $('#sheetUrl').focus(), 50);
 });
 $('#sheetCancel').addEventListener('click', () => $('#sheetOvl').classList.remove('open'));
-$('#sheetForget').addEventListener('click', () => { try { localStorage.removeItem(CONFIG.KEY + '.sheet'); } catch(e) {} toast('Saved link removed from this browser'); });
+$('#sheetForget').addEventListener('click', () => { try { localStorage.removeItem(SHEET_KEY); } catch(e) {} toast('Saved link removed from this browser'); });
 $('#sheetGo').addEventListener('click', async () => {
   const url = $('#sheetUrl').value.trim(), auto = +$('#sheetAuto').value;
   S.live = null;
-  if(await loadGoogle(url, {auto})){ lsSet(CONFIG.KEY + '.sheet', url); $('#sheetOvl').classList.remove('open'); }
+  if(await loadGoogle(url, {auto})){ lsSet(SHEET_KEY, url); $('#sheetOvl').classList.remove('open'); }
 });
 setInterval(() => {
   if(S.live && S.live.auto > 0 && Date.now() - S.live.at >= S.live.auto * 60000 && !document.hidden && !document.querySelector('.ovl.open'))
@@ -1435,9 +1297,7 @@ async function boot(){
   setStatusInput(); buildZoomButtons();
   let qs = {};
   try { qs = Object.fromEntries(new URLSearchParams(location.search)); } catch(e) {}
-  // Everyone sees the dashboard sheet; saved links / ?sheet= / ?file= only apply in scheduler mode
-  if(!isSched()) qs = {};
-  const sheet = isSched() ? (qs.sheet || lsGet(CONFIG.KEY + '.sheet') || (qs.file ? '' : CONFIG.SHEET)) : CONFIG.SHEET;
+  const sheet = qs.sheet || lsGet(SHEET_KEY) || (qs.file ? '' : CONFIG.SHEET);
   if(sheet){
     if(await loadGoogle(sheet, {quiet:true})) return;
     toast("Couldn't reach the Google Sheet from here – showing sample data. (Previews inside Claude block outside data; it works once hosted, e.g. on GitHub Pages. You can also use File › Download › .xlsx in Sheets and drop the file here.)", 9000);
