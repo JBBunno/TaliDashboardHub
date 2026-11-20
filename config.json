@@ -43,7 +43,7 @@
       "name": "Shutdown Data Upload Panel",
       "desc": "Upload MS Project Data to Cloud",
       "url": "https://taldashboard.palmcrest.com.au/talison-upload/",
-      "emoji": "🌐",
+      "emoji": "⚙️",
       "color": "c4",
       "enabled": true
     },
@@ -58,12 +58,21 @@
     },
     {
       "id": "app7",
-      "name": "New App",
-      "desc": "Add your description",
-      "url": "",
+      "name": "CR3 TELESCOPIC Gantt",
+      "desc": "Online Gantt Chart",
+      "url": "https://taldashboard.palmcrest.com.au/gantt-d3/",
       "emoji": "🌐",
       "color": "c1",
       "enabled": false
+    },
+    {
+      "id": "app8",
+      "name": "CGP1 Gantt Chart",
+      "desc": "Online Gantt Chart",
+      "url": "https://taldashboard.palmcrest.com.au/gantt-d2/",
+      "emoji": "🌐",
+      "color": "c2",
+      "enabled": true
     }
   ]
 }
