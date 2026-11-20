@@ -29,6 +29,34 @@
       "color": "c2",
       "enabled": true
     },
+        
+    {
+      "id": "app6",
+      "name": "CPG3 Gantt",
+      "desc": "Online Gantt Chart",
+      "url": "https://taldashboard.palmcrest.com.au/gantt-d1/",
+      "emoji": "🌐",
+      "color": "c0",
+      "enabled": true
+    },
+    {
+      "id": "app7",
+      "name": "CR3 TELESCOPIC Gantt",
+      "desc": "Online Gantt Chart",
+      "url": "https://taldashboard.palmcrest.com.au/gantt-d3/",
+      "emoji": "🌐",
+      "color": "c1",
+      "enabled": true
+    },
+    {
+      "id": "app8",
+      "name": "CGP1 Gantt Chart",
+      "desc": "Online Gantt Chart",
+      "url": "https://taldashboard.palmcrest.com.au/gantt-d2/",
+      "emoji": "🌐",
+      "color": "c2",
+      "enabled": true
+    },
     {
       "id": "app4",
       "name": "Shutdown Feedback",
@@ -47,32 +75,5 @@
       "color": "c4",
       "enabled": true
     },
-    {
-      "id": "app6",
-      "name": "CPG3 GAnt",
-      "desc": "Online Gantt Chart",
-      "url": "https://taldashboard.palmcrest.com.au/gantt-d1/",
-      "emoji": "🌐",
-      "color": "c0",
-      "enabled": true
-    },
-    {
-      "id": "app7",
-      "name": "CR3 TELESCOPIC Gantt",
-      "desc": "Online Gantt Chart",
-      "url": "https://taldashboard.palmcrest.com.au/gantt-d3/",
-      "emoji": "🌐",
-      "color": "c1",
-      "enabled": false
-    },
-    {
-      "id": "app8",
-      "name": "CGP1 Gantt Chart",
-      "desc": "Online Gantt Chart",
-      "url": "https://taldashboard.palmcrest.com.au/gantt-d2/",
-      "emoji": "🌐",
-      "color": "c2",
-      "enabled": true
-    }
   ]
 }
