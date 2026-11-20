@@ -28,8 +28,7 @@
       "emoji": "📊",
       "color": "c2",
       "enabled": true
-    },
-        
+    },        
     {
       "id": "app6",
       "name": "CPG3 Gantt",
@@ -74,6 +73,6 @@
       "emoji": "⚙️",
       "color": "c4",
       "enabled": true
-    },
+    }
   ]
 }
